@@ -92,28 +92,31 @@ function shuffled(items, rng) {
   return result;
 }
 
-function cellsInQuadrants(size, edgeMargin = 1) {
+function cellsInQuadrants(size, edgeMargin = 0) {
   const center = (size - 1) / 2;
   const quadrants = [[], [], [], []];
   const all = [];
+  const edgeCells = [];
 
   for (let row = 0; row < size; row += 1) {
     for (let col = 0; col < size; col += 1) {
-      if (Math.min(row, col, size - 1 - row, size - 1 - col) < edgeMargin) continue;
+      const edge = Math.min(row, col, size - 1 - row, size - 1 - col);
+      if (edge < edgeMargin) continue;
       const quadrant = quadrantOf(row, col, size);
       if (quadrant === -1 || isCenterZone(row, col, size)) continue;
       const index = indexOf(row, col, size);
       quadrants[quadrant].push(index);
       all.push(index);
+      if (edge === 0) edgeCells.push(index);
     }
   }
 
-  return { quadrants, all, center };
+  return { quadrants, all, edgeCells, center };
 }
 
 function buildCandidate(size, rng, edgeMargin = 1) {
   const stonePairs = PRESET_COUNT[size];
-  const { quadrants, all, center } = cellsInQuadrants(size, edgeMargin);
+  const { quadrants, all, edgeCells, center } = cellsInQuadrants(size, edgeMargin);
 
   for (let attempt = 0; attempt < 140; attempt += 1) {
     const stones = [];
@@ -149,8 +152,14 @@ function buildCandidate(size, rng, edgeMargin = 1) {
       stones.push(mirrorIndex(index, size));
     };
 
+    // 强制最外层至少有一颗黑子；中心对称会同时给白方一颗外圈子。
+    const forcedEdge = shuffled(edgeCells, rng).find(isAvailable);
+    if (forcedEdge === undefined) continue;
+    add(forcedEdge);
+    const forcedQuadrant = quadrantOf(rowOf(forcedEdge, size), colOf(forcedEdge, size), size);
+
     let valid = true;
-    for (const quadrant of shuffled([0, 1, 2, 3], rng)) {
+    for (const quadrant of shuffled([0, 1, 2, 3].filter((value) => value !== forcedQuadrant), rng)) {
       const candidate = shuffled(quadrants[quadrant], rng).find(isAvailable);
       if (candidate === undefined) {
         valid = false;
@@ -220,8 +229,9 @@ function layoutScore(layout, size) {
 
   for (const stone of stones) {
     const edge = Math.min(stone.row, stone.col, size - 1 - stone.row, size - 1 - stone.col);
-    if (edge === 1) score += 1000;
-    else if (edge === 2) score += 70;
+    if (edge === 0) score += 700;
+    else if (edge === 1) score += 150;
+    else if (edge === 2) score += 25;
   }
 
   const quadrants = [0, 0, 0, 0];
@@ -244,6 +254,17 @@ function layoutScore(layout, size) {
   return score;
 }
 
+function interiorCount(layout, size) {
+  let count = 0;
+  for (let index = 0; index < layout.board.length; index += 1) {
+    if (layout.board[index] === EMPTY) continue;
+    const row = rowOf(index, size);
+    const col = colOf(index, size);
+    if (Math.min(row, col, size - 1 - row, size - 1 - col) >= 3) count += 1;
+  }
+  return count;
+}
+
 /**
  * 随机生成中心对称的预设布局。
  *
@@ -252,9 +273,10 @@ function layoutScore(layout, size) {
  *  2. 四个象限内，黑白双方都至少各有一子；
  *  3. 任意两子切比雪夫距离 >= 2；
  *  4. 中心 3×3 区域无预设子；
- *  5. 最外侧两圈不放预设子（边缘距离至少为 2）。
+ *  5. 棋盘最外层至少有一枚预设子。
  *
- * 软性偏好：生成多组候选并择优，尽量拉开距离、均衡四象限并远离边缘。
+ * 软性偏好：生成多组候选并择优，避免除最外层以外的棋子继续向边缘集中，
+ * 同时拉开间距、均衡四象限与行列分布。
  */
 export function generateLayout(size, rng = Math.random) {
   if (!PRESET_COUNT[size]) {
@@ -264,17 +286,16 @@ export function generateLayout(size, rng = Math.random) {
   const candidateCount = 240;
   const candidates = [];
   for (let attempt = 0; attempt < candidateCount * 2 && candidates.length < candidateCount; attempt += 1) {
-    const candidate = buildCandidate(size, rng, 2);
-    if (candidate) {
+    const candidate = buildCandidate(size, rng, 0);
+    if (candidate && interiorCount(candidate, size) >= 2) {
       candidates.push({ ...candidate, score: layoutScore(candidate, size) });
     }
   }
 
-  // 极端情况下逐级放宽边缘限制，仍保留其他硬性规则。
-  for (const margin of [1, 0]) {
-    if (candidates.length > 0) break;
-    for (let attempt = 0; attempt < candidateCount && candidates.length === 0; attempt += 1) {
-      const candidate = buildCandidate(size, rng, margin);
+  // 极端随机流下放宽“至少两子远离边缘”的偏好，但保留最外层有子等硬性规则。
+  if (candidates.length === 0) {
+    for (let attempt = 0; attempt < candidateCount * 2 && candidates.length === 0; attempt += 1) {
+      const candidate = buildCandidate(size, rng, 0);
       if (candidate) {
         candidates.push({ ...candidate, score: layoutScore(candidate, size) });
       }

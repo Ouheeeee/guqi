@@ -56,6 +56,7 @@ function validateLayout(size, layout) {
     { black: 0, white: 0 },
   ];
 
+  const edges = [];
   for (const index of stones) {
     const row = Math.floor(index / size);
     const col = index % size;
@@ -64,12 +65,15 @@ function validateLayout(size, layout) {
     assert.notEqual(row, mid, '预设不应落在中线');
     assert.notEqual(col, mid, '预设不应落在中线');
     assert.ok(!(Math.abs(row - mid) <= 1 && Math.abs(col - mid) <= 1), '中心 3×3 必须为空');
-    assert.ok(Math.min(row, col, size - 1 - row, size - 1 - col) >= 2, '预设应远离棋盘边缘');
 
     const quadrant = (row < mid ? 0 : 2) + (col < mid ? 0 : 1);
     if (color === BLACK) quadrants[quadrant].black += 1;
     else quadrants[quadrant].white += 1;
+    edges.push(Math.min(row, col, size - 1 - row, size - 1 - col));
   }
+
+  assert.ok(edges.includes(0), '最外层必须至少有一枚预设子');
+  assert.ok(edges.filter((edge) => edge >= 3).length >= 2, '布局至少要有棋子远离边缘，不能全部挤在边缘');
 
   for (const blackIndex of black) {
     assert.equal(board[mirrorIndex(blackIndex, size)], WHITE, '中心对称');
