@@ -64,6 +64,7 @@ function validateLayout(size, layout) {
     assert.notEqual(row, mid, '预设不应落在中线');
     assert.notEqual(col, mid, '预设不应落在中线');
     assert.ok(!(Math.abs(row - mid) <= 1 && Math.abs(col - mid) <= 1), '中心 3×3 必须为空');
+    assert.ok(Math.min(row, col, size - 1 - row, size - 1 - col) >= 2, '预设应远离棋盘边缘');
 
     const quadrant = (row < mid ? 0 : 2) + (col < mid ? 0 : 1);
     if (color === BLACK) quadrants[quadrant].black += 1;

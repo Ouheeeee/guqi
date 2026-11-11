@@ -92,13 +92,14 @@ function shuffled(items, rng) {
   return result;
 }
 
-function cellsInQuadrants(size) {
+function cellsInQuadrants(size, edgeMargin = 1) {
   const center = (size - 1) / 2;
   const quadrants = [[], [], [], []];
   const all = [];
 
   for (let row = 0; row < size; row += 1) {
     for (let col = 0; col < size; col += 1) {
+      if (Math.min(row, col, size - 1 - row, size - 1 - col) < edgeMargin) continue;
       const quadrant = quadrantOf(row, col, size);
       if (quadrant === -1 || isCenterZone(row, col, size)) continue;
       const index = indexOf(row, col, size);
@@ -110,25 +111,11 @@ function cellsInQuadrants(size) {
   return { quadrants, all, center };
 }
 
-/**
- * 随机生成中心对称的预设布局。
- *
- * 同时满足：
- *  1. 任意黑子 (r,c) 的对称点 (N-1-r,N-1-c) 必为白子；
- *  2. 四个象限内，黑白双方都至少各有一子（等价于黑子遍布四象限）；
- *  3. 任意两子切比雪夫距离 >= 2；
- *  4. 中心 3×3 区域无预设子。
- */
-export function generateLayout(size, rng = Math.random) {
-  if (!PRESET_COUNT[size]) {
-    throw new Error(`Unsupported board size: ${size}`);
-  }
-
+function buildCandidate(size, rng, edgeMargin = 1) {
   const stonePairs = PRESET_COUNT[size];
-  const { quadrants, all, center } = cellsInQuadrants(size);
-  const maxAttempts = 600;
+  const { quadrants, all, center } = cellsInQuadrants(size, edgeMargin);
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+  for (let attempt = 0; attempt < 140; attempt += 1) {
     const stones = [];
     const black = [];
 
@@ -195,7 +182,119 @@ export function generateLayout(size, rng = Math.random) {
     };
   }
 
-  throw new Error('Could not generate a valid preset layout');
+  return null;
+}
+
+/**
+ * 布局均匀度评分：越小越好。
+ * 通过大量候选之间择优，减少边角子、近距对子和同色扎堆。
+ */
+function layoutScore(layout, size) {
+  const stones = [];
+  for (let index = 0; index < layout.board.length; index += 1) {
+    if (layout.board[index] === EMPTY) continue;
+    stones.push({
+      index,
+      color: layout.board[index],
+      row: rowOf(index, size),
+      col: colOf(index, size),
+    });
+  }
+
+  let score = 0;
+  for (let a = 0; a < stones.length; a += 1) {
+    const one = stones[a];
+    for (let b = a + 1; b < stones.length; b += 1) {
+      const two = stones[b];
+      const distance = Math.max(Math.abs(one.row - two.row), Math.abs(one.col - two.col));
+      const sameColor = one.color === two.color;
+      if (distance === 2) {
+        score += 110 + (sameColor ? 85 : 0);
+      } else if (distance === 3) {
+        score += 8 + (sameColor ? 22 : 0);
+      } else if (distance === 4 && sameColor) {
+        score += 4;
+      }
+    }
+  }
+
+  for (const stone of stones) {
+    const edge = Math.min(stone.row, stone.col, size - 1 - stone.row, size - 1 - stone.col);
+    if (edge === 1) score += 1000;
+    else if (edge === 2) score += 70;
+  }
+
+  const quadrants = [0, 0, 0, 0];
+  for (const stone of stones) {
+    quadrants[quadrantOf(stone.row, stone.col, size)] += 1;
+  }
+  const target = stones.length / 4;
+  for (const total of quadrants) score += Math.abs(total - target) * 24;
+
+  // 行、列方向的分布也尽量均匀，避免某一带堆积。
+  const rows = new Array(size).fill(0);
+  const cols = new Array(size).fill(0);
+  for (const stone of stones) {
+    rows[stone.row] += 1;
+    cols[stone.col] += 1;
+  }
+  for (const count of rows) score += count * count * 14;
+  for (const count of cols) score += count * count * 14;
+
+  return score;
+}
+
+/**
+ * 随机生成中心对称的预设布局。
+ *
+ * 硬性条件：
+ *  1. 任意黑子 (r,c) 的对称点 (N-1-r,N-1-c) 必为白子；
+ *  2. 四个象限内，黑白双方都至少各有一子；
+ *  3. 任意两子切比雪夫距离 >= 2；
+ *  4. 中心 3×3 区域无预设子；
+ *  5. 最外侧两圈不放预设子（边缘距离至少为 2）。
+ *
+ * 软性偏好：生成多组候选并择优，尽量拉开距离、均衡四象限并远离边缘。
+ */
+export function generateLayout(size, rng = Math.random) {
+  if (!PRESET_COUNT[size]) {
+    throw new Error(`Unsupported board size: ${size}`);
+  }
+
+  const candidateCount = 240;
+  const candidates = [];
+  for (let attempt = 0; attempt < candidateCount * 2 && candidates.length < candidateCount; attempt += 1) {
+    const candidate = buildCandidate(size, rng, 2);
+    if (candidate) {
+      candidates.push({ ...candidate, score: layoutScore(candidate, size) });
+    }
+  }
+
+  // 极端情况下逐级放宽边缘限制，仍保留其他硬性规则。
+  for (const margin of [1, 0]) {
+    if (candidates.length > 0) break;
+    for (let attempt = 0; attempt < candidateCount && candidates.length === 0; attempt += 1) {
+      const candidate = buildCandidate(size, rng, margin);
+      if (candidate) {
+        candidates.push({ ...candidate, score: layoutScore(candidate, size) });
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    throw new Error('Could not generate a valid preset layout');
+  }
+
+  candidates.sort((a, b) => a.score - b.score);
+  const poolSize = Math.max(1, Math.ceil(candidates.length * 0.05));
+  const chosen = candidates[Math.floor(rng() * poolSize)];
+
+  return {
+    board: chosen.board,
+    black: chosen.black,
+    white: chosen.white,
+    center: chosen.center,
+  };
 }
 
 export function startGame(game) {
