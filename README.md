@@ -86,6 +86,26 @@ npm test
 
 线上地址：<https://ouheeeee.github.io/guqi/>
 
+#### 在任意新对话 / 新环境发布
+
+发布需要一个有 `repo` 权限的 GitHub Token（GitHub 唯一的身份凭据，没有它任何人都无法写入你的仓库）。任选一种方式提供：
+
+```bash
+# 方式一：环境变量
+GITHUB_TOKEN=gho_xxx node scripts/deploy.mjs "更新说明"
+
+# 方式二：参数
+node scripts/deploy.mjs "更新说明" --token gho_xxx
+
+# 方式三：放在本机（已被 .gitignore 忽略，不会进入仓库）
+echo '{"access_token":"gho_xxx"}' > .deploy/github-token.json
+node scripts/deploy.mjs "更新说明"
+```
+
+脚本会自动提交当前改动 → 推送到 `main` → 触发 GitHub Pages 部署。
+
+Token 获取：GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → 勾选 `repo` 与 `workflow`。
+
 ### 单文件构建
 
 ```bash
