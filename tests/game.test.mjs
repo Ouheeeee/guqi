@@ -3,19 +3,24 @@ import test from 'node:test';
 
 import {
   BLACK,
+  DEFAULT_KOMI,
   EMPTY,
+  KOMI_OPTIONS,
   WHITE,
   PRESET_COUNT,
   analyzeGroups,
   computeOutcome,
   createGame,
+  formatNumber,
   generateLayout,
   groupCounts,
+  judgeScores,
   mirrorIndex,
   placeStone,
   resignGame,
   resultDescription,
   resultLabel,
+  setKomi,
   startGame,
   undoMove,
 } from '../site/game.js';
@@ -179,7 +184,7 @@ test('当前行棋方认输时对方立即获胜，悔棋可重新开始', () =>
   assert.equal(blackResigns.result.winner, WHITE);
 });
 
-test('棋盘填满后按间数结算，同数时后手白方获胜', () => {
+test('棋盘填满后按贴目后的间数结算', () => {
   let state = startGame(createGame(13, { rng: seededRandom(21) }));
   const totalMoves = 13 * 13 - PRESET_COUNT[13] * 2;
 
@@ -191,17 +196,17 @@ test('棋盘填满后按间数结算，同数时后手白方获胜', () => {
   assert.equal(state.phase, 'ended');
   assert.equal(state.history.length, totalMoves);
   assert.equal(state.board.includes(EMPTY), false);
-  const scores = groupCounts(state.board, 13);
-  assert.deepEqual(state.result.scores, scores);
   assert.equal(state.result.reason, 'board-full');
+  assert.equal(state.result.komi, DEFAULT_KOMI);
+  assert.deepEqual(state.result.scores, groupCounts(state.board, 13));
+  assert.deepEqual(state.result, computeOutcome(state.board, 13, DEFAULT_KOMI));
 
-  if (scores.black === scores.white) {
-    assert.equal(state.result.isTie, true);
+  if (state.result.rawTie) {
     assert.equal(state.result.winner, WHITE);
     assert.equal(resultLabel(state.result), '白胜因平局');
   } else {
-    assert.equal(state.result.isTie, false);
-    assert.equal(state.result.winner, scores.black < scores.white ? BLACK : WHITE);
+    const adjusted = state.result.adjustedScores;
+    assert.equal(state.result.winner, adjusted.black < adjusted.white ? BLACK : WHITE);
   }
 
   const undone = undoMove(state);
@@ -210,7 +215,43 @@ test('棋盘填满后按间数结算，同数时后手白方获胜', () => {
   assert.equal(undone.history.length, totalMoves - 1);
 });
 
-test('平局裁定与黑方少间获胜的结算逻辑', () => {
+test('三种先手贴目规则产生清晰的胜负与同数判定', () => {
+  assert.deepEqual(KOMI_OPTIONS, [0.5, 1, 1.5]);
+
+  const scores = { black: 2, white: 3 };
+  const half = judgeScores(scores, 0.5);
+  assert.equal(half.winner, BLACK);
+  assert.equal(half.adjustedScores.black, 2.5);
+  assert.equal(half.adjustedScores.white, 3);
+  assert.equal(half.rawTie, false);
+  assert.equal(half.handicapTie, false);
+  assert.equal(resultLabel({ ...half, reason: 'board-full' }), '黑胜');
+
+  const one = judgeScores(scores, 1);
+  assert.equal(one.winner, WHITE);
+  assert.equal(one.adjustedScores.black, 3);
+  assert.equal(one.adjustedScores.white, 3);
+  assert.equal(one.handicapTie, true);
+  assert.equal(resultLabel({ ...one, reason: 'board-full' }), '白胜因贴目');
+  assert.match(resultDescription({ ...one, reason: 'board-full' }), /后手白方获胜/);
+
+  const oneAndHalf = judgeScores(scores, 1.5);
+  assert.equal(oneAndHalf.winner, WHITE);
+  assert.equal(oneAndHalf.adjustedScores.black, 3.5);
+  assert.equal(oneAndHalf.adjustedScores.white, 3);
+  assert.equal(oneAndHalf.handicapTie, false);
+  assert.equal(resultLabel({ ...oneAndHalf, reason: 'board-full' }), '白胜');
+
+  const rawTie = judgeScores({ black: 6, white: 6 }, 1.5);
+  assert.equal(rawTie.rawTie, true);
+  assert.equal(rawTie.isTie, true);
+  assert.equal(rawTie.winner, WHITE);
+  assert.equal(resultLabel({ ...rawTie, reason: 'board-full' }), '白胜因平局');
+  assert.equal(formatNumber(6.5), '6.5');
+  assert.equal(formatNumber(7), '7');
+});
+
+test('平局裁定、黑方少间获胜与贴目重算', () => {
   const tied = [
     BLACK, BLACK,
     WHITE, WHITE,
@@ -218,10 +259,11 @@ test('平局裁定与黑方少间获胜的结算逻辑', () => {
   const tieOutcome = computeOutcome(tied, 2);
   assert.equal(tieOutcome.scores.black, 1);
   assert.equal(tieOutcome.scores.white, 1);
+  assert.equal(tieOutcome.rawTie, true);
   assert.equal(tieOutcome.winner, WHITE);
   assert.equal(tieOutcome.isTie, true);
   assert.equal(resultLabel(tieOutcome), '白胜因平局');
-  assert.match(resultDescription(tieOutcome), /后手白方获胜/);
+  assert.match(resultDescription(tieOutcome), /后手白方胜/);
 
   const blackWins = [
     BLACK, BLACK, WHITE,
@@ -231,8 +273,40 @@ test('平局裁定与黑方少间获胜的结算逻辑', () => {
   const outcome = computeOutcome(blackWins, 3);
   assert.equal(outcome.scores.black, 3);
   assert.equal(outcome.scores.white, 2);
-  assert.equal(outcome.winner, WHITE, '白方间数更少，白方胜');
+  assert.equal(outcome.winner, WHITE, '先手贴 0.5 间后黑方 3.5 间，白方胜');
 
   assert.throws(() => generateLayout(12), /Unsupported/);
   assert.throws(() => createGame(14), /Unsupported/);
+  assert.throws(() => createGame(13, { komi: 0.25 }), /Unsupported komi/);
+  assert.throws(() => judgeScores({ black: 1, white: 1 }, 2), /Unsupported komi/);
+});
+
+test('每场对局独立保存贴目规则，切换规则会重新裁定已结束对局', () => {
+  let state = createGame(13, { rng: seededRandom(31) });
+  assert.equal(state.komi, DEFAULT_KOMI);
+  assert.equal(setKomi(state, 1.5).komi, 1.5);
+
+  state = startGame(setKomi(state, 1));
+  const preset = state.board.join('');
+  state = placeStone(state, state.board.findIndex((cell) => cell === EMPTY));
+  const recolored = setKomi(state, 0.5);
+  assert.equal(recolored.komi, 0.5);
+  assert.equal(recolored.history.length, 1);
+  assert.equal(recolored.board.join(''), state.board.join(''));
+  assert.notEqual(recolored.board.join(''), preset);
+
+  // 塞满棋盘后修改规则，结果应重新计算。
+  while (state.phase === 'playing') {
+    state = placeStone(state, state.board.findIndex((cell) => cell === EMPTY));
+  }
+  assert.equal(state.phase, 'ended');
+  const recomputed = setKomi(state, 1);
+  assert.equal(recomputed.result.komi, 1);
+  assert.deepEqual(recomputed.result, computeOutcome(state.board, 13, 1));
+
+  const resignedState = resignGame(startGame(createGame(13, { komi: 1.5, rng: seededRandom(41) })));
+  const resignRecomputed = setKomi(resignedState, 0.5);
+  assert.equal(resignRecomputed.result.reason, 'resign');
+  assert.equal(resignRecomputed.result.winner, resignedState.result.winner);
+  assert.equal(resignRecomputed.result.komi, 0.5);
 });

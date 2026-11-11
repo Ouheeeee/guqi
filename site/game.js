@@ -3,7 +3,9 @@
  *
  * 棋盘以长度 N*N 的一维数组表示：
  *   0 = 空位，1 = 黑棋，2 = 白棋
- * 黑方先行，终局以“间”（连通块数）少者获胜，同数白方胜。
+ * 黑方先行，终局以“间”（连通块数）少者获胜。
+ * 先手黑方按规则贴 0.5 / 1 / 1.5 间，再比较双方调整后的间数；
+ * 贴目后同数或原始间数相同，均由后手白方获胜。
  */
 
 export const EMPTY = 0;
@@ -12,6 +14,9 @@ export const WHITE = 2;
 
 export const BOARD_SIZES = [13, 15];
 export const PRESET_COUNT = Object.freeze({ 13: 6, 15: 7 });
+export const KOMI_OPTIONS = Object.freeze([0.5, 1, 1.5]);
+export const DEFAULT_KOMI = 0.5;
+export const MAX_MATCHES = 6;
 
 const ORTHOGONAL = [
   [-1, 0],
@@ -253,16 +258,61 @@ export function groupCounts(board, size) {
   return { black: analysis.black, white: analysis.white };
 }
 
-export function computeOutcome(board, size) {
-  const scores = groupCounts(board, size);
-  const isTie = scores.black === scores.white;
-  const winner = isTie ? WHITE : scores.black < scores.white ? BLACK : WHITE;
+export function formatNumber(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+}
+
+export function isValidKomi(komi) {
+  return KOMI_OPTIONS.includes(Number(komi));
+}
+
+export function normalizeKomi(komi) {
+  const value = Number(komi);
+  return KOMI_OPTIONS.includes(value) ? value : DEFAULT_KOMI;
+}
+
+function requireKomi(komi) {
+  const value = Number(komi);
+  if (!KOMI_OPTIONS.includes(value)) {
+    throw new Error(`Unsupported komi: ${komi}`);
+  }
+  return value;
+}
+
+export function adjustedScores(scores, komi = DEFAULT_KOMI) {
+  const value = normalizeKomi(komi);
+  return {
+    black: scores.black + value,
+    white: scores.white,
+  };
+}
+
+/**
+ * 按先手贴目规则判定胜负。
+ * 原始间数相同，或黑方加贴后与白方相同，均由白方获胜。
+ */
+export function judgeScores(scores, komi = DEFAULT_KOMI) {
+  const value = requireKomi(komi);
+  const adjusted = adjustedScores(scores, value);
+  const rawTie = scores.black === scores.white;
+  const handicapTie = !rawTie && adjusted.black === adjusted.white;
+  const winner = adjusted.black < adjusted.white ? BLACK : WHITE;
 
   return {
     winner,
     loser: otherColor(winner),
-    scores,
-    isTie,
+    scores: { black: scores.black, white: scores.white },
+    komi: value,
+    adjustedScores: adjusted,
+    rawTie,
+    handicapTie,
+    isTie: rawTie || handicapTie,
+  };
+}
+
+export function computeOutcome(board, size, komi = DEFAULT_KOMI) {
+  return {
+    ...judgeScores(groupCounts(board, size), komi),
     reason: 'board-full',
   };
 }
@@ -273,9 +323,11 @@ export function createGame(size = 13, options = {}) {
   }
 
   const layout = generateLayout(size, options.rng ?? Math.random);
+  const komi = requireKomi(options.komi ?? DEFAULT_KOMI);
 
   return {
     size,
+    komi,
     board: layout.board,
     presets: {
       black: layout.black,
@@ -291,6 +343,27 @@ export function createGame(size = 13, options = {}) {
     startedAt: null,
     layoutId: options.layoutId ?? null,
   };
+}
+
+export function setKomi(game, komi) {
+  const value = requireKomi(komi);
+  if (game.komi === value) return game;
+
+  let result = game.result;
+  if (game.phase === 'ended' && result) {
+    if (result.reason === 'board-full') {
+      result = computeOutcome(game.board, game.size, value);
+    } else {
+      result = {
+        ...judgeScores(result.scores, value),
+        winner: result.winner,
+        loser: result.loser,
+        reason: result.reason,
+      };
+    }
+  }
+
+  return { ...game, komi: value, result };
 }
 
 export function placeStone(game, index) {
@@ -315,7 +388,7 @@ export function placeStone(game, index) {
       history,
       lastMove: index,
       phase: 'ended',
-      result: computeOutcome(board, game.size),
+      result: computeOutcome(board, game.size, game.komi),
     };
   }
 
@@ -351,15 +424,14 @@ export function undoMove(game) {
 export function resignGame(game) {
   if (game.phase !== 'playing') return game;
 
-  const scores = groupCounts(game.board, game.size);
+  const judged = judgeScores(groupCounts(game.board, game.size), game.komi);
   return {
     ...game,
     phase: 'ended',
     result: {
+      ...judged,
       winner: otherColor(game.turn),
       loser: game.turn,
-      scores,
-      isTie: false,
       reason: 'resign',
     },
   };
@@ -371,19 +443,28 @@ export function remainingCells(game) {
 
 export function resultLabel(result) {
   if (!result) return '';
-  if (result.reason === 'board-full' && result.isTie) return '白胜因平局';
+  if (result.reason === 'board-full') {
+    if (result.rawTie) return '白胜因平局';
+    if (result.handicapTie) return '白胜因贴目';
+  }
   return result.winner === BLACK ? '黑胜' : '白胜';
 }
 
 export function resultDescription(result) {
   if (!result) return '';
+
+  const komi = formatNumber(result.komi);
   if (result.reason === 'resign') {
     return `${colorName(result.loser)}认输，${colorName(result.winner)}直接获胜。`;
   }
-  if (result.isTie) {
-    return `双方各 ${result.scores.black} 间，依规后手白方获胜。`;
+
+  if (result.rawTie) {
+    return `双方原始间数同为 ${result.scores.black} 间；按先手贴 ${komi} 间规则，后手白方胜。`;
   }
-  const winnerScore = result.scores[result.winner === BLACK ? 'black' : 'white'];
-  const loserScore = result.scores[result.winner === BLACK ? 'white' : 'black'];
-  return `${colorName(result.winner)}以 ${winnerScore} 间对 ${loserScore} 间胜出。`;
+
+  if (result.handicapTie) {
+    return `先手贴 ${komi} 间后，双方同为 ${formatNumber(result.adjustedScores.black)} 间；依规后手白方获胜。`;
+  }
+
+  return `先手贴 ${komi} 间后，黑方 ${formatNumber(result.adjustedScores.black)} 间、白方 ${formatNumber(result.adjustedScores.white)} 间；${colorName(result.winner)}胜出。`;
 }

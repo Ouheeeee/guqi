@@ -4,16 +4,21 @@ import {
   WHITE,
   BOARD_SIZES,
   PRESET_COUNT,
+  KOMI_OPTIONS,
+  DEFAULT_KOMI,
+  MAX_MATCHES,
   analyzeGroups,
   coordinateLabel,
   createGame,
   colOf,
+  formatNumber,
   placeStone,
   remainingCells,
   resignGame,
   resultDescription,
   resultLabel,
   rowOf,
+  setKomi,
   startGame,
   undoMove,
   colorName,
@@ -30,6 +35,12 @@ const dom = {
   coordTop: document.querySelector('#coordTop'),
   coordLeft: document.querySelector('#coordLeft'),
   matchLabel: document.querySelector('#matchLabel'),
+  matchTabs: document.querySelector('#matchTabs'),
+  matchCount: document.querySelector('#matchCount'),
+  matchLimit: document.querySelector('#matchLimit'),
+  newMatchBtn: document.querySelector('#newMatchBtn'),
+  matchManageText: document.querySelector('#matchManageText'),
+  closeMatchBtn: document.querySelector('#closeMatchBtn'),
   turnStone: document.querySelector('#turnStone'),
   statusTitle: document.querySelector('#statusTitle'),
   statusSub: document.querySelector('#statusSub'),
@@ -44,6 +55,7 @@ const dom = {
   blackMetric: document.querySelector('#blackMetric'),
   whiteMetric: document.querySelector('#whiteMetric'),
   scoreFoot: document.querySelector('#scoreFoot'),
+  ruleSummary: document.querySelector('#ruleSummary'),
   countToggle: document.querySelector('#countToggle'),
   startBtn: document.querySelector('#startBtn'),
   startBtnText: document.querySelector('#startBtnText'),
@@ -55,6 +67,7 @@ const dom = {
   undoBtn: document.querySelector('#undoBtn'),
   resignBtn: document.querySelector('#resignBtn'),
   sizeButtons: Array.from(document.querySelectorAll('[data-size]')),
+  komiButtons: Array.from(document.querySelectorAll('[data-komi]')),
   toast: document.querySelector('#toast'),
   resultModal: document.querySelector('#resultModal'),
   resultCard: document.querySelector('.result-card'),
@@ -62,6 +75,7 @@ const dom = {
   resultStone: document.querySelector('#resultStone'),
   resultTitle: document.querySelector('#resultTitle'),
   resultDesc: document.querySelector('#resultDesc'),
+  resultKomi: document.querySelector('#resultKomi'),
   modalBlackScore: document.querySelector('#modalBlackScore'),
   modalWhiteScore: document.querySelector('#modalWhiteScore'),
   modalCloseBtn: document.querySelector('#modalCloseBtn'),
@@ -69,13 +83,18 @@ const dom = {
   modalNewBtn: document.querySelector('#modalNewBtn'),
 };
 
-let game = createGame(13);
+let matches = [];
+let activeMatchId = null;
+let game = null;
+let matchSerial = 0;
 let countVisible = true;
 let previousCounts = null;
 let toastTimer = null;
 let resultTimer = null;
 let modalPreviousFocus = null;
 let freshTimer = null;
+let closeArmed = false;
+let closeTimer = null;
 
 const phaseNames = {
   ready: '布局阶段',
@@ -83,11 +102,51 @@ const phaseNames = {
   ended: '终局',
 };
 
+const matchStateNames = {
+  ready: '待开始',
+  playing: '进行中',
+  ended: '已结束',
+};
+
 const backgroundRegions = [
   document.querySelector('.topbar'),
   document.querySelector('.page'),
   document.querySelector('.footer'),
 ];
+
+function activeIndex() {
+  return matches.findIndex((match) => match.id === activeMatchId);
+}
+
+function activeNumber() {
+  const index = activeIndex();
+  return index >= 0 ? index + 1 : 1;
+}
+
+function makeSession({
+  size,
+  komi = DEFAULT_KOMI,
+  start = false,
+  id = null,
+  previousSignature = null,
+} = {}) {
+  let state;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    state = createGame(size, { komi });
+    if (!previousSignature || state.board.join('') !== previousSignature) break;
+  }
+  return {
+    ...(start ? startGame(state) : state),
+    id: id ?? `match-${++matchSerial}`,
+  };
+}
+
+function commitActive(nextGame) {
+  const index = activeIndex();
+  if (index === -1) return;
+  matches[index] = nextGame;
+  game = nextGame;
+}
 
 function stoneMarkup(color) {
   const stone = document.createElement('span');
@@ -97,23 +156,9 @@ function stoneMarkup(color) {
   return stone;
 }
 
-function layoutSignature() {
-  return game.board.join('');
-}
-
-function makeGame(size, previousSignature = null) {
-  let next = createGame(size);
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    if (next.board.join('') !== previousSignature) break;
-    next = createGame(size);
-  }
-  return next;
-}
-
 function buildBoard() {
   const size = game.size;
   dom.boardShell.style.setProperty('--n', String(size));
-  dom.matchLabel.textContent = `${size} 路棋盘`;
   dom.coordTop.replaceChildren();
   dom.coordLeft.replaceChildren();
 
@@ -223,12 +268,13 @@ function renderStats({ animate = false } = {}) {
   dom.scorePanel.classList.toggle('counts-hidden', !countVisible);
   dom.blackMetric.setAttribute(
     'aria-label',
-    countVisible ? `黑方孤棋数 ${counts.black} 间` : '黑方孤棋数已隐藏',
+    countVisible ? `黑方原始孤棋数 ${counts.black} 间` : '黑方孤棋数已隐藏',
   );
   dom.whiteMetric.setAttribute(
     'aria-label',
-    countVisible ? `白方孤棋数 ${counts.white} 间` : '白方孤棋数已隐藏',
+    countVisible ? `白方原始孤棋数 ${counts.white} 间` : '白方孤棋数已隐藏',
   );
+  dom.ruleSummary.textContent = `先手贴 ${formatNumber(game.komi)} 间`;
 
   const blackActive = game.phase === 'playing' && game.turn === BLACK;
   const whiteActive = game.phase === 'playing' && game.turn === WHITE;
@@ -236,21 +282,22 @@ function renderStats({ animate = false } = {}) {
   dom.whiteCard.classList.toggle('is-active', whiteActive);
   dom.blackCard.setAttribute(
     'aria-label',
-    `黑方，${blackActive ? '行棋中，' : ''}${countVisible ? `孤棋数 ${counts.black} 间` : '孤棋数已隐藏'}`,
+    `黑方，${blackActive ? '行棋中，' : ''}${countVisible ? `原始孤棋数 ${counts.black} 间` : '孤棋数已隐藏'}`,
   );
   dom.whiteCard.setAttribute(
     'aria-label',
-    `白方，${whiteActive ? '行棋中，' : ''}${countVisible ? `孤棋数 ${counts.white} 间` : '孤棋数已隐藏'}`,
+    `白方，${whiteActive ? '行棋中，' : ''}${countVisible ? `原始孤棋数 ${counts.white} 间` : '孤棋数已隐藏'}`,
   );
 
   const hiddenNote = countVisible ? '' : ' · 孤棋数已隐藏';
+  const matchNote = `第 ${activeNumber()} 场`;
   if (game.phase === 'ready') {
     const preset = PRESET_COUNT[game.size];
-    dom.scoreFoot.textContent = `预设布局 · 黑 ${preset} 子 / 白 ${preset} 子${hiddenNote}`;
+    dom.scoreFoot.textContent = `${matchNote} · 预设黑 ${preset} 子 / 白 ${preset} 子${hiddenNote}`;
   } else if (game.phase === 'playing') {
-    dom.scoreFoot.textContent = `已落 ${game.history.length} 手 · 余 ${remainingCells(game)} 格${hiddenNote}`;
+    dom.scoreFoot.textContent = `${matchNote} · 已落 ${game.history.length} 手 · 余 ${remainingCells(game)} 格${hiddenNote}`;
   } else {
-    dom.scoreFoot.textContent = `终局 · 共 ${game.history.length} 手${hiddenNote}`;
+    dom.scoreFoot.textContent = `${matchNote} · 终局 · 共 ${game.history.length} 手${hiddenNote}`;
   }
 
   previousCounts = counts;
@@ -260,12 +307,13 @@ function renderStatus() {
   const phase = game.phase;
   dom.phaseBadge.dataset.phase = phase;
   dom.phaseText.textContent = phaseNames[phase];
+  dom.matchLabel.textContent = `${game.size} 路 · 贴 ${formatNumber(game.komi)} 间`;
 
   dom.turnStone.className = 'turn-stone';
   if (phase === 'playing') {
     dom.turnStone.classList.add(game.turn === BLACK ? 'is-black' : 'is-white');
     dom.statusTitle.textContent = `轮到${colorName(game.turn)}落子`;
-    dom.statusSub.textContent = `第 ${game.history.length + 1} 手 · 横竖相连，斜角不算。`;
+    dom.statusSub.textContent = `第 ${game.history.length + 1} 手 · 先手贴 ${formatNumber(game.komi)} 间。`;
   } else if (phase === 'ended') {
     dom.turnStone.classList.add(game.result?.winner === WHITE ? 'is-white' : 'is-black');
     dom.statusTitle.textContent = resultLabel(game.result);
@@ -273,7 +321,7 @@ function renderStatus() {
   } else {
     dom.turnStone.classList.add('is-idle');
     dom.statusTitle.textContent = '布局已定';
-    dom.statusSub.textContent = '请检查预设布局，准备好后开始对局。';
+    dom.statusSub.textContent = `先手贴 ${formatNumber(game.komi)} 间 · 请检查预设布局，准备好后开始对局。`;
   }
 
   if (phase === 'ready') {
@@ -286,17 +334,51 @@ function renderStatus() {
     const last = game.history[game.history.length - 1];
     dom.lastMoveText.textContent = `上一手 ${colorName(last.color)} ${coordinateLabel(last.index, game.size)} · 第 ${last.moveNumber} 手`;
   }
+
+  document.title = matches.length > 1
+    ? `对局 ${activeNumber()} / ${matches.length} · 孤棋`
+    : '孤棋 · 双人同屏对战';
+}
+
+function resetCloseConfirm() {
+  if (closeTimer) window.clearTimeout(closeTimer);
+  closeTimer = null;
+  closeArmed = false;
+  dom.closeMatchBtn.classList.remove('is-confirming');
+  dom.closeMatchBtn.textContent = '关闭本场';
+}
+
+function syncCloseButton() {
+  dom.closeMatchBtn.disabled = matches.length <= 1;
+  dom.closeMatchBtn.title = matches.length <= 1
+    ? '至少保留一场对局'
+    : '关闭并移除当前对局';
 }
 
 function renderControls() {
   const isReady = game.phase === 'ready';
   const isPlaying = game.phase === 'playing';
+  const atLimit = matches.length >= MAX_MATCHES;
 
   dom.startBtn.disabled = !isReady;
   dom.mobileStartBtn.disabled = !isReady;
   dom.mobileStartWrap.hidden = !isReady;
   dom.undoBtn.disabled = game.history.length === 0;
   dom.resignBtn.disabled = !isPlaying;
+  dom.newGameBtn.disabled = atLimit;
+  dom.newGameBtn.title = atLimit
+    ? `最多同时保留 ${MAX_MATCHES} 场对局`
+    : '保留当前对局，并开启一场新的对局';
+  dom.newMatchBtn.disabled = atLimit;
+  dom.newMatchBtn.title = atLimit
+    ? `已达 ${MAX_MATCHES} 场上限，请先关闭一场`
+    : '开启新对局';
+
+  dom.matchManageText.textContent = atLimit
+    ? `本场 · 已达 ${MAX_MATCHES} 场上限`
+    : `本场 · ${activeNumber()} / ${MAX_MATCHES}`;
+  syncCloseButton();
+  if (!closeArmed) dom.closeMatchBtn.textContent = '关闭本场';
 
   if (isReady) {
     dom.startBtnText.textContent = '开始对局';
@@ -312,13 +394,73 @@ function renderControls() {
   for (const button of dom.sizeButtons) {
     button.setAttribute('aria-pressed', String(Number(button.dataset.size) === game.size));
   }
+  for (const button of dom.komiButtons) {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.komi) === game.komi));
+  }
+}
+
+function revealActiveTab() {
+  window.requestAnimationFrame(() => {
+    const activeTab = dom.matchTabs.querySelector('.match-tab.is-active');
+    if (!activeTab) return;
+    const tabRect = activeTab.getBoundingClientRect();
+    const containerRect = dom.matchTabs.getBoundingClientRect();
+    if (tabRect.left < containerRect.left) {
+      dom.matchTabs.scrollLeft -= containerRect.left - tabRect.left + 4;
+    } else if (tabRect.right > containerRect.right) {
+      dom.matchTabs.scrollLeft += tabRect.right - containerRect.right + 4;
+    }
+  });
+}
+
+function focusActiveTab() {
+  const activeTab = dom.matchTabs.querySelector('.match-tab.is-active');
+  activeTab?.focus({ preventScroll: true });
+}
+
+function renderMatchTabs() {
+  const tabs = matches.map((match, index) => {
+    const isActive = match.id === activeMatchId;
+    const stateLabel = matchStateNames[match.phase];
+    const resultNote = match.phase === 'ended' && match.result
+      ? `，${resultLabel(match.result)}`
+      : '';
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = `match-tab${isActive ? ' is-active' : ''}`;
+    tab.dataset.matchId = match.id;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
+    tab.setAttribute(
+      'aria-label',
+      `对局 ${index + 1}，${stateLabel}，${match.size} 路，先手贴 ${formatNumber(match.komi)} 间${resultNote}`,
+    );
+    tab.title = `对局 ${index + 1} · ${match.size} 路 · 先手贴 ${formatNumber(match.komi)} 间 · ${stateLabel}${resultNote}`;
+
+    const number = document.createElement('span');
+    number.className = 'match-tab-no';
+    number.textContent = String(index + 1).padStart(2, '0');
+    const state = document.createElement('span');
+    state.className = 'match-tab-state';
+    state.textContent = stateLabel;
+    tab.append(number, state);
+    return tab;
+  });
+
+  dom.matchTabs.replaceChildren(...tabs);
+  dom.matchCount.textContent = String(matches.length);
+  dom.matchLimit.textContent = `/ ${MAX_MATCHES}`;
+  revealActiveTab();
 }
 
 function renderAll(options = {}) {
+  if (closeArmed) resetCloseConfirm();
   syncBoard(options.animateMove ?? null);
   renderStatus();
   renderStats({ animate: Boolean(options.animateCounts) });
   renderControls();
+  renderMatchTabs();
 }
 
 function hideToast() {
@@ -334,7 +476,7 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     dom.toast.classList.remove('is-visible');
     toastTimer = null;
-  }, 2400);
+  }, 2600);
 }
 
 function clearResultTimer() {
@@ -363,25 +505,41 @@ function closeResult({ restoreFocus = true } = {}) {
       if (target && !target.disabled && document.contains(target)) {
         target.focus({ preventScroll: true });
       } else {
-        dom.newGameBtn.focus({ preventScroll: true });
+        focusActiveTab();
       }
     });
   }
+}
+
+function renderResultContent() {
+  const result = game.result;
+  const title = resultLabel(result);
+  const reason = result.reason === 'resign'
+    ? '认输'
+    : result.rawTie
+      ? '平局裁定'
+      : result.handicapTie
+        ? '贴目同数'
+        : '棋枰已满';
+  dom.resultKicker.textContent = `对局 ${activeNumber()} · 终局 · ${reason}`;
+  dom.resultStone.className = `result-stone ${result.winner === BLACK ? 'is-black' : 'is-white'}`;
+  dom.resultTitle.textContent = title;
+  dom.resultDesc.textContent = resultDescription(result);
+  dom.modalBlackScore.textContent = String(result.scores.black);
+  dom.modalWhiteScore.textContent = String(result.scores.white);
+  dom.resultKomi.textContent = `先手贴 ${formatNumber(result.komi)} 间 · 贴目后 黑 ${formatNumber(result.adjustedScores.black)} / 白 ${formatNumber(result.adjustedScores.white)} 间`;
+
+  const atLimit = matches.length >= MAX_MATCHES;
+  dom.modalNewBtn.disabled = atLimit;
+  dom.modalNewBtn.textContent = atLimit ? `已达 ${MAX_MATCHES} 场上限` : '再开一局';
+  dom.modalNewBtn.title = atLimit ? '请先关闭一场，再开启新对局' : '保留本场并开启新对局';
 }
 
 function openResult() {
   if (!game.result || !dom.resultModal.hidden) return;
 
   hideToast();
-  const result = game.result;
-  const title = resultLabel(result);
-  dom.resultKicker.textContent = result.reason === 'resign' ? '终局 · 认输' : '终局 · 棋枰已满';
-  dom.resultStone.className = `result-stone ${result.winner === BLACK ? 'is-black' : 'is-white'}`;
-  dom.resultTitle.textContent = title;
-  dom.resultDesc.textContent = resultDescription(result);
-  dom.modalBlackScore.textContent = String(result.scores.black);
-  dom.modalWhiteScore.textContent = String(result.scores.white);
-
+  renderResultContent();
   modalPreviousFocus = document.activeElement;
   dom.resultModal.hidden = false;
   document.body.classList.add('modal-open');
@@ -405,34 +563,72 @@ function focusFirstPlayable() {
   cell.focus({ preventScroll: true });
 }
 
-function resetToGame(nextGame, { start = false, message = '' } = {}) {
+function switchMatch(id, { focusTab = false, announce = true } = {}) {
+  const target = matches.find((match) => match.id === id);
+  if (!target) return;
+
+  if (id === activeMatchId) {
+    if (focusTab) focusActiveTab();
+    return;
+  }
+
   clearResultTimer();
   closeResult({ restoreFocus: false });
-  game = start ? startGame(nextGame) : nextGame;
+  activeMatchId = target.id;
+  game = target;
+  previousCounts = null;
   buildBoard();
   renderAll();
-  if (message) showToast(message);
+  if (announce) showToast(`已切换到第 ${activeNumber()} 场对局`);
+  if (focusTab) window.requestAnimationFrame(focusActiveTab);
 }
 
 function handleNewGame() {
-  const previous = layoutSignature();
-  resetToGame(makeGame(game.size, previous), {
+  if (matches.length >= MAX_MATCHES) {
+    showToast(`最多同时保留 ${MAX_MATCHES} 场对局，请先关闭一场`);
+    return;
+  }
+
+  clearResultTimer();
+  closeResult({ restoreFocus: false });
+  const source = game;
+  const next = makeSession({
+    size: source.size,
+    komi: source.komi,
     start: true,
-    message: '新对局开始 · 黑方先行',
+    previousSignature: source.board.join(''),
   });
+
+  matches.push(next);
+  activeMatchId = next.id;
+  game = next;
+  previousCounts = null;
+  buildBoard();
+  renderAll();
+  showToast(`已开启第 ${matches.length} 场 · 原对局已保留`);
+  window.requestAnimationFrame(focusFirstPlayable);
 }
 
 function handleRegenerate() {
-  const previous = layoutSignature();
-  resetToGame(makeGame(game.size, previous), {
+  const previousSignature = game.board.join('');
+  const next = makeSession({
+    size: game.size,
+    komi: game.komi,
     start: false,
-    message: '预设布局已重新生成 · 点击「开始对局」',
+    id: game.id,
+    previousSignature,
   });
+  clearResultTimer();
+  closeResult({ restoreFocus: false });
+  commitActive(next);
+  buildBoard();
+  renderAll();
+  showToast('本场预设布局已重新生成 · 点击「开始对局」');
 }
 
 function handleStart() {
   if (game.phase !== 'ready') return;
-  game = startGame(game);
+  commitActive(startGame(game));
   renderAll();
   showToast('对局开始 · 黑方先行');
   window.requestAnimationFrame(focusFirstPlayable);
@@ -442,14 +638,14 @@ function handleUndo() {
   if (game.history.length === 0) return;
   clearResultTimer();
   closeResult({ restoreFocus: false });
-  game = undoMove(game);
+  commitActive(undoMove(game));
   renderAll({ animateCounts: true });
   showToast(`已悔棋 · 轮到${colorName(game.turn)}落子`);
 }
 
 function handleResign() {
   if (game.phase !== 'playing') return;
-  game = resignGame(game);
+  commitActive(resignGame(game));
   renderAll({ animateCounts: true });
   openResult();
 }
@@ -461,23 +657,96 @@ function handleCell(index) {
   const next = placeStone(game, index);
   if (next === game) return;
 
-  game = next;
+  commitActive(next);
   renderAll({ animateMove: index, animateCounts: true });
   if (game.phase === 'ended') scheduleResult();
 }
 
 function handleSizeChange(size) {
   if (!BOARD_SIZES.includes(size) || size === game.size) return;
-  resetToGame(makeGame(size), {
+  clearResultTimer();
+  closeResult({ restoreFocus: false });
+  const next = makeSession({
+    size,
+    komi: game.komi,
     start: false,
-    message: `已切换至 ${size} 路棋盘 · 请开始对局`,
+    id: game.id,
   });
+  commitActive(next);
+  buildBoard();
+  renderAll();
+  showToast(`本场已切换至 ${size} 路棋盘 · 请开始对局`);
+}
+
+function handleKomiChange(komi) {
+  const value = Number(komi);
+  if (!KOMI_OPTIONS.includes(value) || value === game.komi) return;
+  commitActive(setKomi(game, value));
+  renderAll();
+  if (!dom.resultModal.hidden) renderResultContent();
+  const resultNote = game.phase === 'ended' ? ` · ${resultLabel(game.result)}` : '';
+  showToast(`本场先手贴 ${formatNumber(value)} 间${resultNote}`);
+}
+
+function handleCloseMatch() {
+  if (matches.length <= 1) {
+    showToast('至少保留一场对局');
+    return;
+  }
+
+  if (!closeArmed) {
+    clearResultTimer();
+    closeArmed = true;
+    dom.closeMatchBtn.classList.add('is-confirming');
+    dom.closeMatchBtn.textContent = '确认关闭本场';
+    if (closeTimer) window.clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(resetCloseConfirm, 3600);
+    showToast('再次点击「确认关闭本场」将丢弃该场进度');
+    return;
+  }
+
+  resetCloseConfirm();
+  clearResultTimer();
+  closeResult({ restoreFocus: false });
+  const index = activeIndex();
+  matches.splice(index, 1);
+  const next = matches[Math.max(0, index - 1)] ?? matches[0];
+  activeMatchId = next.id;
+  game = next;
+  previousCounts = null;
+  buildBoard();
+  renderAll();
+  showToast(`已关闭一场对局 · 剩余 ${matches.length} 场`);
+  window.requestAnimationFrame(focusActiveTab);
 }
 
 function handleCountToggle() {
   countVisible = dom.countToggle.checked;
   renderStats();
   showToast(countVisible ? '实时孤棋数已显示' : '实时孤棋数已隐藏');
+}
+
+function handleTabsClick(event) {
+  const tab = event.target.closest('.match-tab');
+  if (!tab) return;
+  switchMatch(tab.dataset.matchId, { focusTab: true });
+}
+
+function handleTabsKeydown(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const tabs = Array.from(dom.matchTabs.querySelectorAll('.match-tab'));
+  if (tabs.length < 2) return;
+  const currentIndex = tabs.indexOf(document.activeElement);
+  if (currentIndex === -1) return;
+
+  let nextIndex = currentIndex;
+  if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = tabs.length - 1;
+
+  event.preventDefault();
+  switchMatch(tabs[nextIndex].dataset.matchId, { focusTab: true });
 }
 
 function moveCellFocus(index) {
@@ -569,6 +838,10 @@ dom.board.addEventListener('focusin', (event) => {
   cell.tabIndex = 0;
 });
 
+dom.matchTabs.addEventListener('click', handleTabsClick);
+dom.matchTabs.addEventListener('keydown', handleTabsKeydown);
+dom.newMatchBtn.addEventListener('click', handleNewGame);
+dom.closeMatchBtn.addEventListener('click', handleCloseMatch);
 dom.countToggle.addEventListener('change', handleCountToggle);
 dom.startBtn.addEventListener('click', handleStart);
 dom.mobileStartBtn.addEventListener('click', handleStart);
@@ -581,9 +854,14 @@ for (const button of dom.sizeButtons) {
   button.addEventListener('click', () => handleSizeChange(Number(button.dataset.size)));
 }
 
+for (const button of dom.komiButtons) {
+  button.addEventListener('click', () => handleKomiChange(Number(button.dataset.komi)));
+}
+
 dom.modalCloseBtn.addEventListener('click', () => closeResult());
 dom.modalViewBtn.addEventListener('click', () => closeResult());
 dom.modalNewBtn.addEventListener('click', () => {
+  if (dom.modalNewBtn.disabled) return;
   closeResult({ restoreFocus: false });
   handleNewGame();
   window.requestAnimationFrame(focusFirstPlayable);
@@ -593,20 +871,42 @@ dom.resultModal.addEventListener('click', (event) => {
 });
 dom.resultModal.addEventListener('keydown', trapModalFocus);
 
+const initialMatch = makeSession({ size: 13, komi: DEFAULT_KOMI, start: false });
+matches = [initialMatch];
+activeMatchId = initialMatch.id;
+game = initialMatch;
+
 buildBoard();
 renderAll();
 
 // 便于自动化验收：只读快照，不暴露任何可修改入口。
 Object.defineProperty(window, '__guqi', {
   value: {
-    snapshot: () => ({
-      size: game.size,
-      phase: game.phase,
-      turn: game.turn,
-      moves: game.history.length,
-      counts: analyzeGroups(game.board, game.size),
-      result: game.result,
-    }),
+    snapshot: () => {
+      const counts = analyzeGroups(game.board, game.size);
+      return {
+        activeId: activeMatchId,
+        matchCount: matches.length,
+        matchLimit: MAX_MATCHES,
+        activeIndex: activeIndex(),
+        size: game.size,
+        komi: game.komi,
+        phase: game.phase,
+        turn: game.turn,
+        moves: game.history.length,
+        counts: { black: counts.black, white: counts.white },
+        result: game.result,
+        matches: matches.map((match, index) => ({
+          index: index + 1,
+          id: match.id,
+          size: match.size,
+          komi: match.komi,
+          phase: match.phase,
+          moves: match.history.length,
+          result: match.result,
+        })),
+      };
+    },
   },
   configurable: false,
   writable: false,

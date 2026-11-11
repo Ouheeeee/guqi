@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#efede6">
-  <meta name="description" content="孤棋：一款双人同屏的极简围棋变体。横竖相连成块，一块计一间；棋盘填满后，孤棋少者胜。支持 13×13 / 15×15、实时间数、悔棋与认输。">
+  <meta name="description" content="孤棋：一款双人同屏的极简连线围棋变体。横竖相连成块，一块计一间；支持先手贴 0.5 / 1 / 1.5 间、最多 6 场并行对局、实时间数、悔棋与认输。">
   <meta property="og:title" content="孤棋 · 双人同屏对战">
-  <meta property="og:description" content="相连成块，一块一间。终局孤棋少者胜；同数时，后手白方胜。">
+  <meta property="og:description" content="相连成块，一块一间。三种先手贴目规则自由切换，终局按贴目后的间数判定；最多同时保留 6 场对局。">
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
@@ -81,6 +81,15 @@
         </div>
       </div>
 
+      <div class="match-rail" aria-label="对局列表">
+        <span class="rail-label">对局</span>
+        <div class="match-tabs" id="matchTabs" role="tablist" aria-label="切换对局"></div>
+        <button type="button" class="match-add" id="newMatchBtn" aria-label="开启新对局" title="开启新对局">
+          <span aria-hidden="true">+</span>
+        </button>
+        <span class="rail-count"><strong id="matchCount">1</strong><span class="rail-limit" id="matchLimit">/ 6</span></span>
+      </div>
+
       <div class="board-shell" id="boardShell">
         <div id="coordTop" class="coords coords-top" aria-hidden="true"></div>
         <div id="coordLeft" class="coords coords-left" aria-hidden="true"></div>
@@ -123,8 +132,8 @@
             </div>
           </article>
 
-          <div class="same-rule" aria-hidden="true">
-            <span></span><span>同数 · 白方胜</span><span></span>
+          <div class="same-rule" aria-live="polite">
+            <span aria-hidden="true"></span><span id="ruleSummary">先手贴 0.5 间</span><span aria-hidden="true"></span>
           </div>
 
           <article class="player-card" id="whiteCard" data-player="white" aria-label="白方，孤棋数">
@@ -158,7 +167,7 @@
         </button>
 
         <div class="action-grid">
-          <button type="button" class="btn btn-soft" id="newGameBtn" title="重新生成布局并立即开始新对局">
+          <button type="button" class="btn btn-soft" id="newGameBtn" title="保留当前对局，并开启一场新的对局">
             <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>新开局
           </button>
           <button type="button" class="btn btn-soft" id="regenerateBtn" title="只重新生成预设布局，不开始对局">
@@ -172,7 +181,12 @@
           </button>
         </div>
 
-        <p class="action-note">「新开局」直接开赛；「重新生成」只更换布局。</p>
+        <p class="action-note">「新开局」保留本场并新开一场；「重新生成」只更换本场布局。</p>
+
+        <div class="match-manage">
+          <span id="matchManageText">本场 · 1 / 6</span>
+          <button type="button" class="text-button" id="closeMatchBtn">关闭本场</button>
+        </div>
 
         <div class="size-row">
           <span class="size-label">棋盘</span>
@@ -185,6 +199,15 @@
             </button>
           </div>
         </div>
+
+        <div class="size-row komi-row">
+          <span class="size-label">先手贴</span>
+          <div class="segmented komi-seg" id="komiControl" role="group" aria-label="选择先手贴目规则">
+            <button type="button" data-komi="0.5" aria-pressed="true">0.5 间</button>
+            <button type="button" data-komi="1" aria-pressed="false">1 间</button>
+            <button type="button" data-komi="1.5" aria-pressed="false">1.5 间</button>
+          </div>
+        </div>
       </section>
 
       <section class="panel rules-panel" aria-labelledby="rulesHeading">
@@ -192,7 +215,7 @@
           <h2 id="rulesHeading">规则</h2>
           <span class="panel-kicker">HOW TO WIN</span>
         </div>
-        <p class="rule-lead">相连成块，一块计一间。终局孤棋少者胜。</p>
+        <p class="rule-lead">相连成块，一块计一间。终局按先手贴目后的间数判定。</p>
         <ol class="rule-list">
           <li>
             <span class="rule-no">01</span>
@@ -204,7 +227,11 @@
           </li>
           <li>
             <span class="rule-no">03</span>
-            <p><strong>终局</strong>棋盘填满后比较间数；若相同，后手白方获胜。</p>
+            <p><strong>终局</strong>棋盘填满后，按先手贴目后的间数少者胜；原始间数相同或贴目后同数，均由后手白方获胜。</p>
+          </li>
+          <li>
+            <span class="rule-no">04</span>
+            <p><strong>贴目</strong>先手可贴 0.5 / 1 / 1.5 间，可随时切换，只影响终局结算。</p>
           </li>
         </ol>
         <details class="preset-details">
@@ -252,8 +279,9 @@
           <strong id="modalWhiteScore">6</strong><em>间</em>
         </div>
       </div>
+      <p class="result-komi" id="resultKomi">先手贴 0.5 间 · 贴目后 黑 6.5 / 白 6 间</p>
       <div class="modal-actions">
-        <button type="button" class="btn btn-primary" id="modalNewBtn">再来一局</button>
+        <button type="button" class="btn btn-primary" id="modalNewBtn">再开一局</button>
         <button type="button" class="btn btn-soft" id="modalViewBtn">查看棋盘</button>
       </div>
     </section>
