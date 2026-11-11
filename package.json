@@ -1,6 +1,6 @@
 {
   "name": "guqi",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "description": "孤棋 · 双人同屏的极简连线围棋变体",
