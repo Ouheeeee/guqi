@@ -1,0 +1,12 @@
+{
+  "name": "guqi",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "孤棋 · 双人同屏的极简连线围棋变体",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build:single": "node scripts/build-single.mjs",
+    "serve": "npx serve site"
+  }
+}

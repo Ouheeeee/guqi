@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#efede6">
+  <meta name="description" content="孤棋：一款双人同屏的极简围棋变体。横竖相连成块，一块计一间；棋盘填满后，孤棋少者胜。支持 13×13 / 15×15、实时间数、悔棋与认输。">
+  <meta property="og:title" content="孤棋 · 双人同屏对战">
+  <meta property="og:description" content="相连成块，一块一间。终局孤棋少者胜；同数时，后手白方胜。">
+  <meta property="og:type" content="website">
+  <title>孤棋 · 双人同屏对战</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <svg class="icon-defs" aria-hidden="true" width="0" height="0">
+    <symbol id="icon-play" viewBox="0 0 24 24">
+      <path d="M8 5.5c0-.8.9-1.3 1.6-.9l9 6.5c.6.4.6 1.3 0 1.7l-9 6.5c-.7.5-1.6 0-1.6-.8V5.5Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-spark" viewBox="0 0 24 24">
+      <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24">
+      <path d="M20 7v5h-5M4 17v-5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18.2 16.4A8 8 0 0 1 5 16.2M5.8 7.6A8 8 0 0 1 19 7.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-undo" viewBox="0 0 24 24">
+      <path d="M9.5 7 4.8 11.4 9.5 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.2 11.4h8.2a5.6 5.6 0 0 1 0 11.2H11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-flag" viewBox="0 0 24 24">
+      <path d="M6 21V4m0 .8c4.8-2.6 7.2 2.6 12 0v8.4c-4.8 2.6-7.2-2.6-12 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+
+  <a class="skip-link" href="#board">跳到棋盘</a>
+
+  <header class="topbar">
+    <div class="brand" aria-label="孤棋">
+      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+        <rect x="1" y="1" width="42" height="42" rx="13" fill="#171614"/>
+        <circle cx="15.5" cy="15.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="28.5" cy="28.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="15.5" cy="28.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="28.5" cy="15.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="22" cy="22" r="1.3" fill="#f8f6ef" opacity=".55"/>
+      </svg>
+      <div class="brand-copy">
+        <span class="brand-cn">孤棋</span>
+        <span class="brand-en">GU QI · SOLITUDE</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-chip"><span class="chip-dot" aria-hidden="true"></span>双人同屏</span>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <span class="topbar-note">无需登录 · 即时开局</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="board-panel" aria-labelledby="statusTitle">
+      <div class="board-head">
+        <div class="match-meta">
+          <p class="eyebrow"><span>MATCH</span><span class="eyebrow-rule" aria-hidden="true"></span><span id="matchLabel">13 路棋盘</span></p>
+          <div class="turn-line">
+            <span id="turnStone" class="turn-stone is-idle" aria-hidden="true"></span>
+            <h1 id="statusTitle" aria-live="polite">布局已定</h1>
+          </div>
+          <p id="statusSub" class="status-sub">请检查预设布局，准备好后开始对局。</p>
+        </div>
+        <div class="board-head-side">
+          <span id="phaseBadge" class="phase-badge" data-phase="ready"><span aria-hidden="true"></span><span class="phase-text" id="phaseText">布局阶段</span></span>
+          <label class="count-switch" for="countToggle">
+            <span class="switch-label">实时孤棋数</span>
+            <input id="countToggle" type="checkbox" checked>
+            <span class="switch-track" aria-hidden="true"><span></span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="board-shell" id="boardShell">
+        <div id="coordTop" class="coords coords-top" aria-hidden="true"></div>
+        <div id="coordLeft" class="coords coords-left" aria-hidden="true"></div>
+        <div id="board" class="board" data-phase="ready" data-turn="1" role="group" aria-label="棋盘，点击空格落子"></div>
+      </div>
+
+      <div class="board-foot">
+        <span class="last-move"><span class="last-move-mark" aria-hidden="true"></span><span id="lastMoveText">等待开始对局</span></span>
+        <span class="foot-rule">横竖相连 · 斜角不算</span>
+      </div>
+
+      <div class="mobile-start-wrap" id="mobileStartWrap">
+        <button type="button" class="btn btn-primary" id="mobileStartBtn">
+          <svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg>
+          <span>开始对局</span>
+          <span class="btn-hint">黑方先行</span>
+        </button>
+      </div>
+    </section>
+
+    <aside class="sidebar" aria-label="对局面板">
+      <section class="panel score-panel" id="scorePanel" aria-labelledby="scoreHeading">
+        <div class="panel-head">
+          <h2 id="scoreHeading">局面</h2>
+          <span class="panel-kicker">LIVE COUNT</span>
+        </div>
+
+        <div class="players">
+          <article class="player-card" id="blackCard" data-player="black" aria-label="黑方，孤棋数">
+            <div class="player-identity">
+              <span class="stone-icon stone-icon-black" aria-hidden="true"></span>
+              <div class="player-text">
+                <div class="player-name">黑方 <span class="turn-tag">行棋中</span></div>
+                <span class="player-role">先手</span>
+              </div>
+            </div>
+            <div class="metric" id="blackMetric">
+              <span class="metric-value" id="blackCount">6</span>
+              <span class="metric-unit">间</span>
+            </div>
+          </article>
+
+          <div class="same-rule" aria-hidden="true">
+            <span></span><span>同数 · 白方胜</span><span></span>
+          </div>
+
+          <article class="player-card" id="whiteCard" data-player="white" aria-label="白方，孤棋数">
+            <div class="player-identity">
+              <span class="stone-icon stone-icon-white" aria-hidden="true"></span>
+              <div class="player-text">
+                <div class="player-name">白方 <span class="turn-tag">行棋中</span></div>
+                <span class="player-role">后手 · 同数胜</span>
+              </div>
+            </div>
+            <div class="metric" id="whiteMetric">
+              <span class="metric-value" id="whiteCount">6</span>
+              <span class="metric-unit">间</span>
+            </div>
+          </article>
+        </div>
+
+        <p class="panel-foot" id="scoreFoot">预设布局 · 黑 6 子 / 白 6 子</p>
+      </section>
+
+      <section class="panel actions-panel" aria-labelledby="actionsHeading">
+        <div class="panel-head">
+          <h2 id="actionsHeading">对局操作</h2>
+          <span class="panel-kicker">CONTROLS</span>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-start" id="startBtn">
+          <svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg>
+          <span id="startBtnText">开始对局</span>
+          <span class="btn-hint" id="startBtnHint">黑方先行</span>
+        </button>
+
+        <div class="action-grid">
+          <button type="button" class="btn btn-soft" id="newGameBtn" title="重新生成布局并立即开始新对局">
+            <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>新开局
+          </button>
+          <button type="button" class="btn btn-soft" id="regenerateBtn" title="只重新生成预设布局，不开始对局">
+            <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>重新生成开局
+          </button>
+          <button type="button" class="btn btn-soft" id="undoBtn" title="撤销上一步落子">
+            <svg class="icon" aria-hidden="true"><use href="#icon-undo"></use></svg>悔棋
+          </button>
+          <button type="button" class="btn btn-soft" id="resignBtn" title="当前行棋方认输">
+            <svg class="icon" aria-hidden="true"><use href="#icon-flag"></use></svg>认输
+          </button>
+        </div>
+
+        <p class="action-note">「新开局」直接开赛；「重新生成」只更换布局。</p>
+
+        <div class="size-row">
+          <span class="size-label">棋盘</span>
+          <div class="segmented" role="group" aria-label="切换棋盘尺寸">
+            <button type="button" data-size="13" aria-pressed="true">
+              <span>13 × 13</span><small>6 + 6 预设</small>
+            </button>
+            <button type="button" data-size="15" aria-pressed="false">
+              <span>15 × 15</span><small>7 + 7 预设</small>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel rules-panel" aria-labelledby="rulesHeading">
+        <div class="panel-head">
+          <h2 id="rulesHeading">规则</h2>
+          <span class="panel-kicker">HOW TO WIN</span>
+        </div>
+        <p class="rule-lead">相连成块，一块计一间。终局孤棋少者胜。</p>
+        <ol class="rule-list">
+          <li>
+            <span class="rule-no">01</span>
+            <p><strong>相连</strong>横竖相邻的同色棋组成一个连通块，斜角不算。</p>
+          </li>
+          <li>
+            <span class="rule-no">02</span>
+            <p><strong>计间</strong>每个连通块计 1 间，黑白分别累计，实时更新。</p>
+          </li>
+          <li>
+            <span class="rule-no">03</span>
+            <p><strong>终局</strong>棋盘填满后比较间数；若相同，后手白方获胜。</p>
+          </li>
+        </ol>
+        <details class="preset-details">
+          <summary>预设布局的生成条件</summary>
+          <ul>
+            <li>黑白整体中心对称，且四象限内双方均有棋子。</li>
+            <li>任意两子切比雪夫距离不小于 2。</li>
+            <li>棋盘中心 3 × 3 区域保持为空。</li>
+            <li>13 路各 6 子，15 路各 7 子，每局随机生成。</li>
+          </ul>
+        </details>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <span>孤棋 · 双人同屏</span>
+    <span>纯前端对局 · 刷新页面即清空棋局</span>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="resultModal" class="modal-layer" hidden>
+    <div class="modal-backdrop" data-modal-close></div>
+    <section class="result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle" aria-describedby="resultDesc" tabindex="-1">
+      <button type="button" class="modal-close" id="modalCloseBtn" aria-label="关闭结果">
+        <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+      </button>
+      <p class="result-kicker" id="resultKicker">终局 · 棋枰已满</p>
+      <div class="result-emblem" id="resultEmblem" aria-hidden="true">
+        <span class="result-stone" id="resultStone"></span>
+      </div>
+      <h2 id="resultTitle">黑胜</h2>
+      <p class="result-desc" id="resultDesc"></p>
+      <div class="result-scores" aria-label="终局孤棋数">
+        <div class="result-score">
+          <span class="stone-icon stone-icon-black" aria-hidden="true"></span>
+          <span class="result-score-label">黑方</span>
+          <strong id="modalBlackScore">6</strong><em>间</em>
+        </div>
+        <span class="result-score-divider" aria-hidden="true"></span>
+        <div class="result-score">
+          <span class="stone-icon stone-icon-white" aria-hidden="true"></span>
+          <span class="result-score-label">白方</span>
+          <strong id="modalWhiteScore">6</strong><em>间</em>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="modalNewBtn">再来一局</button>
+        <button type="button" class="btn btn-soft" id="modalViewBtn">查看棋盘</button>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
