@@ -476,9 +476,9 @@ h1 {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   height: 29px;
-  padding: 0 9px;
+  padding: 0 5px 0 9px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.34);
@@ -486,7 +486,6 @@ h1 {
   font-size: 9px;
   line-height: 1;
   letter-spacing: 0.02em;
-  cursor: pointer;
   transition:
     background 0.17s ease,
     color 0.17s ease,
@@ -497,6 +496,51 @@ h1 {
 .match-tab:hover {
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+}
+
+.match-tab-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.match-tab-main:focus-visible {
+  border-radius: 999px;
+  outline-offset: 1px;
+}
+
+.match-tab-close {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted-soft);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.match-tab-close:hover {
+  background: rgba(23, 22, 20, 0.09);
   color: var(--ink);
 }
 
@@ -516,6 +560,28 @@ h1 {
 
 .match-tab.is-active .match-tab-no {
   color: rgba(251, 249, 242, 0.5);
+}
+
+.match-tab.is-active .match-tab-close {
+  color: rgba(251, 249, 242, 0.52);
+}
+
+.match-tab.is-active .match-tab-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fbf9f2;
+}
+
+.match-tab-close.is-confirming,
+.match-tab.is-active .match-tab-close.is-confirming {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0;
+}
+
+.match-tab-close.is-confirming::after {
+  content: "✓";
+  font-size: 9px;
+  font-weight: 700;
 }
 
 .match-tab-state {
@@ -1176,46 +1242,6 @@ h1 {
   letter-spacing: 0.015em;
 }
 
-.match-manage {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 9px;
-  color: var(--muted-soft);
-  font-family: var(--mono);
-  font-size: 7.5px;
-  letter-spacing: 0.035em;
-}
-
-.text-button {
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--sans);
-  font-size: 9.5px;
-  line-height: 1.2;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-.text-button:hover:not(:disabled) {
-  color: var(--ink);
-}
-
-.text-button.is-confirming {
-  color: var(--accent);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.text-button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
 .size-row {
   display: flex;
   align-items: center;
@@ -1771,8 +1797,10 @@ h1 {
     font-size: 16px;
   }
 
-  .match-manage {
-    font-size: 7px;
+  .match-tab-close {
+    width: 18px;
+    height: 18px;
+    font-size: 14px;
   }
 
   .komi-seg button {

@@ -39,8 +39,6 @@ const dom = {
   matchCount: document.querySelector('#matchCount'),
   matchLimit: document.querySelector('#matchLimit'),
   newMatchBtn: document.querySelector('#newMatchBtn'),
-  matchManageText: document.querySelector('#matchManageText'),
-  closeMatchBtn: document.querySelector('#closeMatchBtn'),
   turnStone: document.querySelector('#turnStone'),
   statusTitle: document.querySelector('#statusTitle'),
   statusSub: document.querySelector('#statusSub'),
@@ -93,8 +91,8 @@ let toastTimer = null;
 let resultTimer = null;
 let modalPreviousFocus = null;
 let freshTimer = null;
-let closeArmed = false;
-let closeTimer = null;
+let pendingCloseMatchId = null;
+let pendingCloseTimer = null;
 
 const phaseNames = {
   ready: '布局阶段',
@@ -340,21 +338,6 @@ function renderStatus() {
     : '孤棋 · 双人同屏对战';
 }
 
-function resetCloseConfirm() {
-  if (closeTimer) window.clearTimeout(closeTimer);
-  closeTimer = null;
-  closeArmed = false;
-  dom.closeMatchBtn.classList.remove('is-confirming');
-  dom.closeMatchBtn.textContent = '关闭本场';
-}
-
-function syncCloseButton() {
-  dom.closeMatchBtn.disabled = matches.length <= 1;
-  dom.closeMatchBtn.title = matches.length <= 1
-    ? '至少保留一场对局'
-    : '关闭并移除当前对局';
-}
-
 function renderControls() {
   const isReady = game.phase === 'ready';
   const isPlaying = game.phase === 'playing';
@@ -373,12 +356,6 @@ function renderControls() {
   dom.newMatchBtn.title = atLimit
     ? `已达 ${MAX_MATCHES} 场上限，请先关闭一场`
     : '开启新对局';
-
-  dom.matchManageText.textContent = atLimit
-    ? `本场 · 已达 ${MAX_MATCHES} 场上限`
-    : `本场 · ${activeNumber()} / ${MAX_MATCHES}`;
-  syncCloseButton();
-  if (!closeArmed) dom.closeMatchBtn.textContent = '关闭本场';
 
   if (isReady) {
     dom.startBtnText.textContent = '开始对局';
@@ -413,30 +390,64 @@ function revealActiveTab() {
   });
 }
 
+function clearPendingCloseState() {
+  if (pendingCloseTimer) window.clearTimeout(pendingCloseTimer);
+  pendingCloseTimer = null;
+  pendingCloseMatchId = null;
+}
+
+function resetPendingClose() {
+  const pendingId = pendingCloseMatchId;
+  clearPendingCloseState();
+  if (!pendingId) return;
+  const button = dom.matchTabs.querySelector(`[data-close-match-id="${pendingId}"]`);
+  if (!button) return;
+  button.classList.remove('is-confirming');
+  button.setAttribute('aria-label', button.dataset.closeLabel);
+  button.title = button.dataset.closeLabel;
+}
+
+function armCloseConfirm(button) {
+  resetPendingClose();
+  pendingCloseMatchId = button.dataset.closeMatchId;
+  button.classList.add('is-confirming');
+  button.setAttribute('aria-label', '再次点击确认关闭本局');
+  button.title = '再次点击确认关闭';
+  pendingCloseTimer = window.setTimeout(resetPendingClose, 3600);
+  showToast('再次点击 × 确认关闭该场对局');
+}
+
 function focusActiveTab() {
-  const activeTab = dom.matchTabs.querySelector('.match-tab.is-active');
+  const activeTab = dom.matchTabs.querySelector('.match-tab.is-active .match-tab-main');
   activeTab?.focus({ preventScroll: true });
 }
 
 function renderMatchTabs() {
+  clearPendingCloseState();
   const tabs = matches.map((match, index) => {
     const isActive = match.id === activeMatchId;
     const stateLabel = matchStateNames[match.phase];
     const resultNote = match.phase === 'ended' && match.result
       ? `，${resultLabel(match.result)}`
       : '';
-    const tab = document.createElement('button');
-    tab.type = 'button';
+
+    const tab = document.createElement('div');
     tab.className = `match-tab${isActive ? ' is-active' : ''}`;
     tab.dataset.matchId = match.id;
-    tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-selected', String(isActive));
-    tab.tabIndex = isActive ? 0 : -1;
-    tab.setAttribute(
+    tab.setAttribute('role', 'presentation');
+
+    const select = document.createElement('button');
+    select.type = 'button';
+    select.className = 'match-tab-main';
+    select.dataset.matchId = match.id;
+    select.setAttribute('role', 'tab');
+    select.setAttribute('aria-selected', String(isActive));
+    select.tabIndex = isActive ? 0 : -1;
+    select.setAttribute(
       'aria-label',
       `对局 ${index + 1}，${stateLabel}，${match.size} 路，先手贴 ${formatNumber(match.komi)} 间${resultNote}`,
     );
-    tab.title = `对局 ${index + 1} · ${match.size} 路 · 先手贴 ${formatNumber(match.komi)} 间 · ${stateLabel}${resultNote}`;
+    select.title = `对局 ${index + 1} · ${match.size} 路 · 先手贴 ${formatNumber(match.komi)} 间 · ${stateLabel}${resultNote}`;
 
     const number = document.createElement('span');
     number.className = 'match-tab-no';
@@ -444,7 +455,19 @@ function renderMatchTabs() {
     const state = document.createElement('span');
     state.className = 'match-tab-state';
     state.textContent = stateLabel;
-    tab.append(number, state);
+    select.append(number, state);
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'match-tab-close';
+    close.dataset.closeMatchId = match.id;
+    close.tabIndex = isActive ? 0 : -1;
+    close.textContent = '×';
+    close.dataset.closeLabel = `关闭对局 ${index + 1}`;
+    close.setAttribute('aria-label', close.dataset.closeLabel);
+    close.title = close.dataset.closeLabel;
+
+    tab.append(select, close);
     return tab;
   });
 
@@ -455,7 +478,6 @@ function renderMatchTabs() {
 }
 
 function renderAll(options = {}) {
-  if (closeArmed) resetCloseConfirm();
   syncBoard(options.animateMove ?? null);
   renderStatus();
   renderStats({ animate: Boolean(options.animateCounts) });
@@ -574,6 +596,7 @@ function switchMatch(id, { focusTab = false, announce = true } = {}) {
 
   clearResultTimer();
   closeResult({ restoreFocus: false });
+  resetPendingClose();
   activeMatchId = target.id;
   game = target;
   previousCounts = null;
@@ -688,35 +711,39 @@ function handleKomiChange(komi) {
   showToast(`本场先手贴 ${formatNumber(value)} 间${resultNote}`);
 }
 
-function handleCloseMatch() {
-  if (matches.length <= 1) {
-    showToast('至少保留一场对局');
-    return;
-  }
+function closeMatch(matchId) {
+  const index = matches.findIndex((match) => match.id === matchId);
+  if (index === -1) return;
 
-  if (!closeArmed) {
-    clearResultTimer();
-    closeArmed = true;
-    dom.closeMatchBtn.classList.add('is-confirming');
-    dom.closeMatchBtn.textContent = '确认关闭本场';
-    if (closeTimer) window.clearTimeout(closeTimer);
-    closeTimer = window.setTimeout(resetCloseConfirm, 3600);
-    showToast('再次点击「确认关闭本场」将丢弃该场进度');
-    return;
-  }
-
-  resetCloseConfirm();
   clearResultTimer();
   closeResult({ restoreFocus: false });
-  const index = activeIndex();
+  const wasActive = matchId === activeMatchId;
+  resetPendingClose();
+
+  // 关闭最后一场时，自动生成一场新的布局，保证页面始终有可操作的对局。
+  if (matches.length === 1) {
+    const next = makeSession({ size: game.size, komi: game.komi, start: false });
+    matches = [next];
+    activeMatchId = next.id;
+    game = next;
+    previousCounts = null;
+    buildBoard();
+    renderAll();
+    showToast('已关闭本场，并新建一场布局');
+    window.requestAnimationFrame(focusActiveTab);
+    return;
+  }
+
   matches.splice(index, 1);
-  const next = matches[Math.max(0, index - 1)] ?? matches[0];
-  activeMatchId = next.id;
-  game = next;
-  previousCounts = null;
-  buildBoard();
+  if (wasActive) {
+    const next = matches[Math.max(0, index - 1)] ?? matches[0];
+    activeMatchId = next.id;
+    game = next;
+    previousCounts = null;
+    buildBoard();
+  }
   renderAll();
-  showToast(`已关闭一场对局 · 剩余 ${matches.length} 场`);
+  showToast(`已关闭对局 · 剩余 ${matches.length} 场`);
   window.requestAnimationFrame(focusActiveTab);
 }
 
@@ -727,14 +754,27 @@ function handleCountToggle() {
 }
 
 function handleTabsClick(event) {
-  const tab = event.target.closest('.match-tab');
+  const closeButton = event.target.closest('[data-close-match-id]');
+  if (closeButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pendingCloseMatchId === closeButton.dataset.closeMatchId) {
+      closeMatch(closeButton.dataset.closeMatchId);
+    } else {
+      armCloseConfirm(closeButton);
+    }
+    return;
+  }
+
+  resetPendingClose();
+  const tab = event.target.closest('.match-tab-main');
   if (!tab) return;
   switchMatch(tab.dataset.matchId, { focusTab: true });
 }
 
 function handleTabsKeydown(event) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-  const tabs = Array.from(dom.matchTabs.querySelectorAll('.match-tab'));
+  const tabs = Array.from(dom.matchTabs.querySelectorAll('.match-tab-main'));
   if (tabs.length < 2) return;
   const currentIndex = tabs.indexOf(document.activeElement);
   if (currentIndex === -1) return;
@@ -841,7 +881,6 @@ dom.board.addEventListener('focusin', (event) => {
 dom.matchTabs.addEventListener('click', handleTabsClick);
 dom.matchTabs.addEventListener('keydown', handleTabsKeydown);
 dom.newMatchBtn.addEventListener('click', handleNewGame);
-dom.closeMatchBtn.addEventListener('click', handleCloseMatch);
 dom.countToggle.addEventListener('change', handleCountToggle);
 dom.startBtn.addEventListener('click', handleStart);
 dom.mobileStartBtn.addEventListener('click', handleStart);
