@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.5.3">
+  <link rel="stylesheet" href="./styles.css?v=1.6.0">
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true" width="0" height="0">
@@ -37,6 +37,9 @@
     <symbol id="icon-cloud" viewBox="0 0 24 24">
       <path d="M7 18h9.5a4 4 0 0 0 .6-8 6 6 0 0 0-11.4 1.8A3.3 3.3 0 0 0 7 18Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M9.5 13.5 12 16l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-expand" viewBox="0 0 24 24">
+      <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
     </symbol>
     <symbol id="icon-close" viewBox="0 0 24 24">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
@@ -81,6 +84,9 @@
           <p id="statusSub" class="status-sub">请检查预设布局，准备好后开始对局。</p>
         </div>
         <div class="board-head-side">
+          <button type="button" class="board-expand" id="boardFullscreenBtn" title="全屏棋盘" aria-label="全屏棋盘">
+            <svg class="icon" aria-hidden="true"><use href="#icon-expand"></use></svg>
+          </button>
           <span id="phaseBadge" class="phase-badge" data-phase="ready"><span aria-hidden="true"></span><span class="phase-text" id="phaseText">布局阶段</span></span>
           <label class="count-switch" for="countToggle">
             <span class="switch-label">实时孤棋数</span>
@@ -119,7 +125,7 @@
       </div>
     </section>
 
-    <aside class="sidebar" aria-label="对局面板">
+    <aside class="sidebar console" aria-label="对局面板">
       <section class="panel score-panel" id="scorePanel" aria-labelledby="scoreHeading">
         <div class="panel-head">
           <h2 id="scoreHeading">局面</h2>
@@ -177,10 +183,10 @@
 
         <div class="action-grid">
           <button type="button" class="btn btn-soft" id="newGameBtn" title="保留当前对局，并开启一场新的对局">
-            <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>新开局
+            <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>新对局
           </button>
           <button type="button" class="btn btn-soft" id="regenerateBtn" title="只重新生成预设布局，不开始对局">
-            <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>重新生成开局
+            <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>换布局
           </button>
           <button type="button" class="btn btn-soft" id="undoBtn" title="撤销上一步落子">
             <svg class="icon" aria-hidden="true"><use href="#icon-undo"></use></svg>悔棋
@@ -196,8 +202,7 @@
           </button>
         </div>
 
-        <p class="action-note">「新开局」保留本场；登录后可保存到云端。</p>
-
+        <p class="console-label">设置</p>
         <div class="size-row">
           <span class="size-label">棋盘</span>
           <div class="segmented" role="group" aria-label="切换棋盘尺寸">
@@ -221,11 +226,10 @@
         </div>
       </section>
 
-      <section class="panel rules-panel" aria-labelledby="rulesHeading">
-        <div class="panel-head">
-          <h2 id="rulesHeading">规则</h2>
-          <span class="panel-kicker">HOW TO WIN</span>
-        </div>
+      <section class="panel rules-panel" aria-label="规则与预设">
+        <details class="rules-fold">
+          <summary><span>规则与预设</span><span class="panel-kicker">HOW TO WIN</span></summary>
+          <div class="rules-body">
         <p class="rule-lead">相连成块，一块一间。终局按贴目后间数判定。</p>
         <ol class="rule-list">
           <li>
@@ -255,9 +259,13 @@
             <li>13 路各 6 子 / 15 路各 7 子。</li>
           </ul>
         </details>
+          </div>
+        </details>
       </section>
     </aside>
   </main>
+
+  <button type="button" class="immersive-exit" id="immersiveExit" hidden>退出全屏</button>
 
   <footer class="footer">
     <span>孤棋 · 双人同屏</span>
@@ -299,6 +307,6 @@
     </section>
   </div>
 
-  <script type="module" src="./app.js?v=1.5.3"></script>
+  <script type="module" src="./app.js?v=1.6.0"></script>
 </body>
 </html>

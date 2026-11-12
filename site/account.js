@@ -6,7 +6,7 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.5.3';
+} from './auth-client.js?v=1.6.0';
 import {
   BLACK,
   WHITE,
@@ -17,7 +17,7 @@ import {
   komiRuleText,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.5.3';
+} from './game.js?v=1.6.0';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {

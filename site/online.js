@@ -8,12 +8,12 @@ import {
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.5.3';
+} from './game.js?v=1.6.0';
 import {
   accountUrl,
   initAccountLink,
   saveOnlineRecord,
-} from './auth-client.js?v=1.5.3';
+} from './auth-client.js?v=1.6.0';
 
 const API_BASE = 'https://guqi-online-api.pages.dev';
 const TOKEN_PREFIX = 'guqi.online.token.';
@@ -43,6 +43,10 @@ const dom = {
   onlinePhaseKicker: $('#onlinePhaseKicker'),
   copyLinkBtn: $('#copyLinkBtn'),
   accountLink: $('#accountLink'),
+  onlineFullscreenBtn: $('#onlineFullscreenBtn'),
+  onlineImmersiveHead: $('#onlineImmersiveHead'),
+  onlineImmersiveStatus: $('#onlineImmersiveStatus'),
+  onlineImmersiveExit: $('#onlineImmersiveExit'),
   backBtn: $('#backBtn'),
   leaveBtn: $('#leaveBtn'),
   onlineRule: $('#onlineRule'),
@@ -112,6 +116,7 @@ let lastPendingKey = null;
 let accountUser = null;
 let recordRoom = null;
 let recordState = 'idle';
+let onlineImmersive = false;
 
 class ApiError extends Error {
   constructor(status, message) {
@@ -543,6 +548,34 @@ function renderPending() {
   lastPendingKey = key;
 }
 
+function updateImmersiveStatus() {
+  if (!dom.onlineImmersiveStatus) return;
+  let text = '联机对局';
+  if (room) {
+    if (room.phase === 'waiting') text = '等待对手加入';
+    else if (room.phase === 'voting') text = '确认开局布局';
+    else if (room.phase === 'ended') text = '对局结束';
+    else if (room.pending) {
+      text = room.pending.by === room.you ? '等待对方确认' : '请处理对方请求';
+    } else {
+      text = room.turn === room.youColor ? '轮到你落子' : '等待对方落子';
+    }
+  }
+  dom.onlineImmersiveStatus.textContent = text;
+}
+
+function setOnlineImmersive(enabled) {
+  onlineImmersive = Boolean(enabled);
+  document.body.classList.toggle('online-immersive', onlineImmersive);
+  dom.onlineImmersiveHead.hidden = !onlineImmersive;
+  updateImmersiveStatus();
+  if (onlineImmersive) {
+    dom.onlineImmersiveExit.focus({ preventScroll: true });
+  } else {
+    dom.onlineFullscreenBtn.focus({ preventScroll: true });
+  }
+}
+
 function updateRecordUI() {
   const ended = room?.phase === 'ended';
   dom.recordBox.hidden = !ended;
@@ -662,6 +695,7 @@ function renderRoom() {
     : `${phaseTitles[room.phase]} · 孤棋联机`;
 
   updateRecordUI();
+  updateImmersiveStatus();
   if (room.phase === 'ended') void maybeSaveOnlineRecord();
 }
 
@@ -789,6 +823,20 @@ async function respondPending(accept) {
 }
 
 function bindEvents() {
+  dom.onlineFullscreenBtn.addEventListener('click', () => setOnlineImmersive(!onlineImmersive));
+  dom.onlineImmersiveExit.addEventListener('click', () => setOnlineImmersive(false));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && onlineImmersive) setOnlineImmersive(false);
+  });
+  dom.saveRecordBtn.addEventListener('click', () => {
+    if (!accountUser) {
+      location.assign(dom.recordLogin.href);
+      return;
+    }
+    recordRoom = null;
+    recordState = 'idle';
+    void maybeSaveOnlineRecord();
+  });
   dom.createForm.addEventListener('submit', createRoom);
   dom.joinForm.addEventListener('submit', joinRoom);
   dom.createSizeControl.addEventListener('click', (event) => {

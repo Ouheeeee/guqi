@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋联机对战：创建房间或输入房间码，与朋友在线下一盘孤棋。系统生成布局，双方同意后开始。">
   <title>孤棋 · 联机对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.5.3">
-  <link rel="stylesheet" href="./online.css?v=1.5.3">
+  <link rel="stylesheet" href="./styles.css?v=1.6.0">
+  <link rel="stylesheet" href="./online.css?v=1.6.0">
 </head>
 <body class="online-body">
   <a class="skip-link" href="#onlineMain">跳到联机大厅</a>
@@ -110,6 +110,13 @@
 
       <div class="online-grid">
         <section class="online-board-col" aria-label="联机棋盘">
+          <div class="online-immersive-head" id="onlineImmersiveHead">
+            <span id="onlineImmersiveStatus">对局进行中</span>
+            <button type="button" class="immersive-exit" id="onlineImmersiveExit">退出全屏</button>
+          </div>
+          <div class="online-board-toolbar">
+            <button type="button" class="board-expand online-expand" id="onlineFullscreenBtn" title="全屏棋盘" aria-label="全屏棋盘">全屏</button>
+          </div>
           <div class="board-shell online-board-shell" id="onlineBoardShell">
             <div id="onlineCoordTop" class="coords coords-top" aria-hidden="true"></div>
             <div id="onlineCoordLeft" class="coords coords-left" aria-hidden="true"></div>
@@ -121,7 +128,7 @@
           </div>
         </section>
 
-        <aside class="online-sidebar">
+        <aside class="online-sidebar console">
           <section class="panel">
             <div class="panel-head">
               <h2>对局玩家</h2>
@@ -244,6 +251,6 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./online.js?v=1.5.3"></script>
+  <script type="module" src="./online.js?v=1.6.0"></script>
 </body>
 </html>

@@ -25,13 +25,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.5.3';
+} from './game.js?v=1.6.0';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.5.3';
+} from './auth-client.js?v=1.6.0';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -75,6 +75,8 @@ const dom = {
   resignBtn: document.querySelector('#resignBtn'),
   settleBtn: document.querySelector('#settleBtn'),
   accountLink: document.querySelector('#accountLink'),
+  boardFullscreenBtn: document.querySelector('#boardFullscreenBtn'),
+  immersiveExit: document.querySelector('#immersiveExit'),
   saveBtn: document.querySelector('#saveBtn'),
   saveBtnHint: document.querySelector('#saveBtnHint'),
   sizeButtons: Array.from(document.querySelectorAll('[data-size]')),
@@ -108,6 +110,7 @@ let pendingCloseMatchId = null;
 let pendingCloseTimer = null;
 let accountUser = null;
 let savingCloud = false;
+let boardImmersive = false;
 
 const phaseNames = {
   ready: '布局阶段',
@@ -702,6 +705,19 @@ function handleSettle() {
   openResult();
 }
 
+function setBoardImmersive(enabled) {
+  boardImmersive = Boolean(enabled);
+  document.body.classList.toggle('board-immersive', boardImmersive);
+  dom.immersiveExit.hidden = !boardImmersive;
+  dom.boardFullscreenBtn.setAttribute('aria-label', boardImmersive ? '退出全屏' : '全屏棋盘');
+  dom.boardFullscreenBtn.title = boardImmersive ? '退出全屏' : '全屏棋盘';
+  if (boardImmersive) {
+    dom.immersiveExit.focus({ preventScroll: true });
+  } else {
+    dom.boardFullscreenBtn.focus({ preventScroll: true });
+  }
+}
+
 async function handleSaveCloud() {
   if (!accountUser) {
     location.assign(accountUrl(location.pathname + location.search));
@@ -1013,6 +1029,11 @@ dom.undoBtn.addEventListener('click', handleUndo);
 dom.resignBtn.addEventListener('click', handleResign);
 dom.settleBtn.addEventListener('click', handleSettle);
 dom.saveBtn.addEventListener('click', handleSaveCloud);
+dom.boardFullscreenBtn.addEventListener('click', () => setBoardImmersive(!boardImmersive));
+dom.immersiveExit.addEventListener('click', () => setBoardImmersive(false));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && boardImmersive && dom.resultModal.hidden) setBoardImmersive(false);
+});
 
 for (const button of dom.sizeButtons) {
   button.addEventListener('click', () => handleSizeChange(Number(button.dataset.size)));
