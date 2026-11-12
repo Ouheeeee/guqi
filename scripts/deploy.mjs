@@ -2,13 +2,10 @@
 /**
  * 一键发布：把当前工作区改动提交到 GitHub main 分支，触发 GitHub Pages 自动部署。
  *
- * Token 查找顺序：
- *   1. 环境变量 GITHUB_TOKEN
- *   2. --token 参数
- *   3. 仓库根目录 .deploy/github-token.json（只存 access_token 即可）
- *   4. 上一级目录 .tools/github-token.json（首次授权时创建）
+ * 凭据策略：不读取任何本地 token 文件。每次发布时由维护者完成一次
+ * GitHub Device Authorization，token 仅通过环境变量或 --token 传入。
  *
- * 用法：node scripts/deploy.mjs [提交说明] [--token <token>]
+ * 用法：GITHUB_TOKEN=<一次性 token> node scripts/deploy.mjs "说明"
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,21 +20,12 @@ const message = args.find((arg, index) => !arg.startsWith('--') && index !== tok
 function readToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN.trim();
   if (flagToken) return flagToken.trim();
-  const candidates = [
-    path.join(root, '.deploy', 'github-token.json'),
-    path.join(root, '..', '.tools', 'github-token.json'),
-  ];
-  for (const file of candidates) {
-    if (!fs.existsSync(file)) continue;
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (data.access_token) return data.access_token;
-  }
   return null;
 }
 
 const token = readToken();
 if (!token) {
-  console.error('缺少 GitHub Token。任选其一：\n  1. 设置环境变量 GITHUB_TOKEN\n  2. 运行 node scripts/deploy.mjs "说明" --token <token>\n  3. 把 token 写入 .deploy/github-token.json：{"access_token":"..."}');
+  console.error('缺少一次性 GitHub Token。先在本次发布中完成 GitHub Device Authorization，然后运行：\n  GITHUB_TOKEN=<一次性 token> node scripts/deploy.mjs "说明"');
   process.exit(1);
 }
 

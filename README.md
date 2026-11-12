@@ -124,25 +124,22 @@ npx wrangler pages deploy public --project-name guqi-online-api --branch main
 
 Cloudflare 账号和 D1 数据库已经配置好；密钥、OAuth token 不进入仓库。
 
-#### 在任意新对话 / 新环境发布
+#### 一次性发布凭据
 
-发布需要一个有 `repo` 权限的 GitHub Token（GitHub 唯一的身份凭据，没有它任何人都无法写入你的仓库）。任选一种方式提供：
+仓库不保存长期部署凭据。每次需要发布时：
+
+1. 发起一次 GitHub Device Authorization，由账号持有人在浏览器输入一次性验证码；
+2. 将本次获得的一次性 token 仅通过环境变量传给发布脚本；
+3. 发布进程退出后不保留 token，撤销本次授权；
+4. 下次修改重新授权。
 
 ```bash
-# 方式一：环境变量
-GITHUB_TOKEN=gho_xxx node scripts/deploy.mjs "更新说明"
-
-# 方式二：参数
-node scripts/deploy.mjs "更新说明" --token gho_xxx
-
-# 方式三：放在本机（已被 .gitignore 忽略，不会进入仓库）
-echo '{"access_token":"gho_xxx"}' > .deploy/github-token.json
-node scripts/deploy.mjs "更新说明"
+GITHUB_TOKEN=<本次一次性 token> node scripts/deploy.mjs "更新说明"
 ```
 
-脚本会自动提交当前改动 → 推送到 `main` → 触发 GitHub Pages 部署。
+脚本会自动提交当前改动 → 推送到 `main` → 触发 GitHub Pages 部署。它不会读取任何本地 token 文件。
 
-Token 获取：GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → 勾选 `repo` 与 `workflow`。
+> Cloudflare 后端变更同理：使用 `wrangler login --device` 完成一次性授权，部署后执行 `wrangler logout` 并清理本地配置。
 
 ### 单文件构建
 
