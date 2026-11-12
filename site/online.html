@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋联机对战：创建房间或输入房间码，与朋友在线下一盘孤棋。系统生成布局，双方同意后开始。">
   <title>孤棋 · 联机对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.5.0">
-  <link rel="stylesheet" href="./online.css?v=1.5.0">
+  <link rel="stylesheet" href="./styles.css?v=1.5.1">
+  <link rel="stylesheet" href="./online.css?v=1.5.1">
 </head>
 <body class="online-body">
   <a class="skip-link" href="#onlineMain">跳到联机大厅</a>
@@ -61,6 +61,7 @@
           <div class="online-field">
             <span class="online-field-label">先手贴</span>
             <div class="segmented online-segmented online-komi-seg" id="createKomiControl" role="group" aria-label="选择先手贴目">
+              <button type="button" data-create-komi="0" aria-pressed="false">不贴</button>
               <button type="button" data-create-komi="0.5" aria-pressed="true">0.5 间</button>
               <button type="button" data-create-komi="1" aria-pressed="false">1 间</button>
               <button type="button" data-create-komi="1.5" aria-pressed="false">1.5 间</button>
@@ -201,6 +202,7 @@
             <div class="online-komi-request">
               <span>申请调整贴目</span>
               <div class="online-komi-options" id="komiRequestButtons">
+                <button type="button" data-komi-request="0">不贴</button>
                 <button type="button" data-komi-request="0.5">0.5 间</button>
                 <button type="button" data-komi-request="1">1 间</button>
                 <button type="button" data-komi-request="1.5">1.5 间</button>
@@ -242,6 +244,6 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./online.js?v=1.5.0"></script>
+  <script type="module" src="./online.js?v=1.5.1"></script>
 </body>
 </html>

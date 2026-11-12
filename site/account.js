@@ -6,16 +6,18 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.5.0';
+} from './auth-client.js?v=1.5.1';
 import {
   BLACK,
   WHITE,
   colorName,
   coordinateLabel,
   formatNumber,
+  komiLabel,
+  komiRuleText,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.5.0';
+} from './game.js?v=1.5.1';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -185,7 +187,7 @@ function renderLocalGame(game) {
   kicker.append(makeElement('span', '', '同屏存档'), makeElement('strong', '', gamePhaseText(game)));
   main.append(kicker);
   main.append(makeElement('h3', '', game.title));
-  main.append(makeElement('p', 'account-item-meta', `${game.size} 路 · 贴 ${formatNumber(game.komi)} 间 · ${game.moves} 手 · 更新于 ${formatDate(game.updatedAt)}`));
+  main.append(makeElement('p', 'account-item-meta', `${game.size} 路 · ${komiLabel(game.komi)} · ${game.moves} 手 · 更新于 ${formatDate(game.updatedAt)}`));
   item.append(main);
 
   const actions = makeElement('div', 'account-item-actions');
@@ -287,10 +289,10 @@ async function openRecord(game) {
       dom.recordSummary.textContent = resultDescription(result);
       const black = makeElement('span', '', `黑 ${result.scores.black} 间`);
       const white = makeElement('span', '', `白 ${result.scores.white} 间`);
-      const komi = makeElement('span', '', `先手贴 ${formatNumber(result.komi)} 间`);
+      const komi = makeElement('span', '', komiRuleText(result.komi));
       dom.recordScores.append(black, white, komi);
     } else {
-      dom.recordSummary.textContent = `${detail.size} 路 · 贴 ${formatNumber(detail.komi)} 间 · ${detail.phase === 'playing' ? '进行中' : '待开始'} · 共 ${detail.moves} 手`;
+      dom.recordSummary.textContent = `${detail.size} 路 · ${komiLabel(detail.komi)} · ${detail.phase === 'playing' ? '进行中' : '待开始'} · 共 ${detail.moves} 手`;
     }
     if (!state.history.length) {
       dom.recordMoves.append(makeElement('li', 'record-empty', '还没有落子。'));

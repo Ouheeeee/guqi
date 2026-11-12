@@ -3,15 +3,17 @@ import {
   WHITE,
   KOMI_OPTIONS,
   formatNumber,
+  komiLabel,
+  komiRuleText,
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.5.0';
+} from './game.js?v=1.5.1';
 import {
   accountUrl,
   initAccountLink,
   saveOnlineRecord,
-} from './auth-client.js?v=1.5.0';
+} from './auth-client.js?v=1.5.1';
 
 const API_BASE = 'https://guqi-online-api.pages.dev';
 const TOKEN_PREFIX = 'guqi.online.token.';
@@ -523,9 +525,12 @@ function renderPending() {
       ? '你已请求按当前孤棋数立即结算，等待对方确认。'
       : '对方请求按当前孤棋数立即结算，是否同意？';
   } else {
+    const requestText = Number(pending.value) === 0
+      ? '取消先手贴目'
+      : `将先手贴目调整为 ${formatNumber(pending.value)} 间`;
     dom.pendingText.textContent = byYou
-      ? `你已申请将先手贴目调整为 ${formatNumber(pending.value)} 间，等待对方确认。`
-      : `对方申请将先手贴目调整为 ${formatNumber(pending.value)} 间，是否同意？`;
+      ? `你已申请${requestText}，等待对方确认。`
+      : `对方申请${requestText}，是否同意？`;
   }
   dom.pendingActions.hidden = byYou;
   dom.acceptPendingBtn.textContent = isUndo ? '同意悔棋' : isSettle ? '同意结算' : '同意变更';
@@ -604,8 +609,8 @@ function renderRoom() {
   dom.roomCodeDisplay.textContent = room.code;
   dom.roomCodeTiny.textContent = room.code;
   dom.waitingCode.textContent = room.code;
-  dom.onlineRule.textContent = `${room.size} 路 · 先手贴 ${formatNumber(room.komi)} 间`;
-  dom.onlineRuleShort.textContent = `${room.size} 路 · 贴 ${formatNumber(room.komi)} 间`;
+  dom.onlineRule.textContent = `${room.size} 路 · ${komiRuleText(room.komi)}`;
+  dom.onlineRuleShort.textContent = `${room.size} 路 · ${komiLabel(room.komi)}`;
 
   const phaseTitles = {
     waiting: '等待对手加入',
@@ -640,7 +645,7 @@ function renderRoom() {
   if (room.phase === 'ended') {
     dom.onlineResultTitle.textContent = resultLabel(room.result);
     dom.onlineResultDesc.textContent = resultDescription(room.result);
-    dom.onlineResultKomi.textContent = `先手贴 ${formatNumber(room.result.komi)} 间 · 贴目后 黑 ${formatNumber(room.result.adjustedScores.black)} / 白 ${formatNumber(room.result.adjustedScores.white)} 间`;
+    dom.onlineResultKomi.textContent = `${komiRuleText(room.result.komi)} · 贴目后 黑 ${formatNumber(room.result.adjustedScores.black)} / 白 ${formatNumber(room.result.adjustedScores.white)} 间`;
   }
 
   const yourTurn = room.phase === 'playing' && room.turn === room.youColor;

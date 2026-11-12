@@ -12,6 +12,8 @@ import {
   createGame,
   colOf,
   formatNumber,
+  komiLabel,
+  komiRuleText,
   placeStone,
   remainingCells,
   resignGame,
@@ -23,13 +25,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.5.0';
+} from './game.js?v=1.5.1';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.5.0';
+} from './auth-client.js?v=1.5.1';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -286,7 +288,7 @@ function renderStats({ animate = false } = {}) {
     'aria-label',
     countVisible ? `白方原始孤棋数 ${counts.white} 间` : '白方孤棋数已隐藏',
   );
-  dom.ruleSummary.textContent = `先手贴 ${formatNumber(game.komi)} 间`;
+  dom.ruleSummary.textContent = komiRuleText(game.komi);
 
   const blackActive = game.phase === 'playing' && game.turn === BLACK;
   const whiteActive = game.phase === 'playing' && game.turn === WHITE;
@@ -319,13 +321,13 @@ function renderStatus() {
   const phase = game.phase;
   dom.phaseBadge.dataset.phase = phase;
   dom.phaseText.textContent = phaseNames[phase];
-  dom.matchLabel.textContent = `${game.size} 路 · 贴 ${formatNumber(game.komi)} 间`;
+  dom.matchLabel.textContent = `${game.size} 路 · ${komiLabel(game.komi)}`;
 
   dom.turnStone.className = 'turn-stone';
   if (phase === 'playing') {
     dom.turnStone.classList.add(game.turn === BLACK ? 'is-black' : 'is-white');
     dom.statusTitle.textContent = `轮到${colorName(game.turn)}落子`;
-    dom.statusSub.textContent = `第 ${game.history.length + 1} 手 · 先手贴 ${formatNumber(game.komi)} 间。`;
+    dom.statusSub.textContent = `第 ${game.history.length + 1} 手 · ${komiRuleText(game.komi)}。`;
   } else if (phase === 'ended') {
     dom.turnStone.classList.add(game.result?.winner === WHITE ? 'is-white' : 'is-black');
     dom.statusTitle.textContent = resultLabel(game.result);
@@ -333,7 +335,7 @@ function renderStatus() {
   } else {
     dom.turnStone.classList.add('is-idle');
     dom.statusTitle.textContent = '布局已定';
-    dom.statusSub.textContent = `先手贴 ${formatNumber(game.komi)} 间 · 请检查预设布局，准备好后开始对局。`;
+    dom.statusSub.textContent = `${komiRuleText(game.komi)} · 请检查预设布局，准备好后开始对局。`;
   }
 
   if (phase === 'ready') {
@@ -463,9 +465,9 @@ function renderMatchTabs() {
     select.tabIndex = isActive ? 0 : -1;
     select.setAttribute(
       'aria-label',
-      `对局 ${index + 1}，${stateLabel}，${match.size} 路，先手贴 ${formatNumber(match.komi)} 间${resultNote}`,
+      `对局 ${index + 1}，${stateLabel}，${match.size} 路，${komiRuleText(match.komi)}${resultNote}`,
     );
-    select.title = `对局 ${index + 1} · ${match.size} 路 · 先手贴 ${formatNumber(match.komi)} 间 · ${stateLabel}${resultNote}`;
+    select.title = `对局 ${index + 1} · ${match.size} 路 · ${komiRuleText(match.komi)} · ${stateLabel}${resultNote}`;
 
     const number = document.createElement('span');
     number.className = 'match-tab-no';
@@ -569,7 +571,7 @@ function renderResultContent() {
   dom.resultDesc.textContent = resultDescription(result);
   dom.modalBlackScore.textContent = String(result.scores.black);
   dom.modalWhiteScore.textContent = String(result.scores.white);
-  dom.resultKomi.textContent = `先手贴 ${formatNumber(result.komi)} 间 · 贴目后 黑 ${formatNumber(result.adjustedScores.black)} / 白 ${formatNumber(result.adjustedScores.white)} 间`;
+  dom.resultKomi.textContent = `${komiRuleText(result.komi)} · 贴目后 黑 ${formatNumber(result.adjustedScores.black)} / 白 ${formatNumber(result.adjustedScores.white)} 间`;
 
   const atLimit = matches.length >= MAX_MATCHES;
   dom.modalNewBtn.disabled = atLimit;
@@ -829,7 +831,7 @@ function handleKomiChange(komi) {
   renderAll();
   if (!dom.resultModal.hidden) renderResultContent();
   const resultNote = game.phase === 'ended' ? ` · ${resultLabel(game.result)}` : '';
-  showToast(`本场先手贴 ${formatNumber(value)} 间${resultNote}`);
+  showToast(`本场${komiRuleText(value)}${resultNote}`);
 }
 
 function closeMatch(matchId) {

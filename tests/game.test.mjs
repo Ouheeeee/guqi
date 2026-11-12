@@ -15,6 +15,8 @@ import {
   generateLayout,
   groupCounts,
   judgeScores,
+  komiLabel,
+  komiRuleText,
   mirrorIndex,
   placeStone,
   resignGame,
@@ -249,8 +251,8 @@ test('立即结算按当前间数判定，贴目变化后重新裁定', () => {
   assert.equal(settleGame(ready), ready);
 });
 
-test('三种先手贴目规则产生清晰的胜负与同数判定', () => {
-  assert.deepEqual(KOMI_OPTIONS, [0.5, 1, 1.5]);
+test('四档先手贴目规则产生清晰的胜负与同数判定', () => {
+  assert.deepEqual(KOMI_OPTIONS, [0, 0.5, 1, 1.5]);
 
   const scores = { black: 2, white: 3 };
   const half = judgeScores(scores, 0.5);
@@ -268,6 +270,25 @@ test('三种先手贴目规则产生清晰的胜负与同数判定', () => {
   assert.equal(one.handicapTie, true);
   assert.equal(resultLabel({ ...one, reason: 'board-full' }), '白胜因贴目');
   assert.match(resultDescription({ ...one, reason: 'board-full' }), /后手白方获胜/);
+
+  const noKomi = judgeScores(scores, 0);
+  assert.equal(noKomi.winner, BLACK);
+  assert.equal(noKomi.adjustedScores.black, 2);
+  assert.equal(noKomi.adjustedScores.white, 3);
+  assert.equal(noKomi.rawTie, false);
+  assert.equal(noKomi.handicapTie, false);
+  assert.equal(komiLabel(0), '不贴');
+  assert.equal(komiRuleText(0), '先手不贴');
+  assert.match(resultDescription({ ...noKomi, reason: 'board-full' }), /黑方 2 间、白方 3 间/);
+  const noKomiTie = judgeScores({ black: 2, white: 2 }, 0);
+  assert.equal(noKomiTie.rawTie, true);
+  assert.equal(noKomiTie.winner, WHITE);
+  assert.equal(resultLabel({ ...noKomiTie, reason: 'settle' }), '白胜因平局');
+  assert.equal(
+    resultDescription({ ...noKomiTie, reason: 'settle' }),
+    '按当前孤棋数结算：黑白原始间数同为 2 间；后手白方胜。',
+  );
+  assert.equal(setKomi(createGame(13), 0).komi, 0);
 
   const oneAndHalf = judgeScores(scores, 1.5);
   assert.equal(oneAndHalf.winner, WHITE);
