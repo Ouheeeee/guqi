@@ -23,13 +23,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.4.0';
+} from './game.js?v=1.5.0';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.4.0';
+} from './auth-client.js?v=1.5.0';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),

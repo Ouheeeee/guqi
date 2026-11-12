@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋账户：登录后保存对局、继续本地棋局、查看联机棋谱。离线对局无需登录。">
   <title>账户 · 孤棋</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.4.0">
-  <link rel="stylesheet" href="./account.css?v=1.4.0">
+  <link rel="stylesheet" href="./styles.css?v=1.5.0">
+  <link rel="stylesheet" href="./account.css?v=1.5.0">
 </head>
 <body class="account-body">
   <a class="skip-link" href="#accountMain">跳到账户内容</a>
@@ -44,7 +44,7 @@
       <div class="account-hero">
         <p class="eyebrow"><span>ACCOUNT</span><span class="eyebrow-rule" aria-hidden="true"></span><span>YOUR GAMES, KEPT</span></p>
         <h1>留下棋谱，<br>随时续局。</h1>
-        <p class="account-hero-sub">不登录也可以同屏或联机对局。登录后，你可以把对局保存到云端，换一台设备继续，也能回看联机棋谱。</p>
+        <p class="account-hero-sub">登录后保存棋局、继续对局，并自动收好联机棋谱。</p>
       </div>
 
       <div class="account-auth-grid">
@@ -54,7 +54,7 @@
             <button type="button" class="auth-tab" id="registerTab" role="tab" aria-selected="false" aria-controls="authForm">注册</button>
           </div>
           <h2 id="authTitle">欢迎回来</h2>
-          <p class="auth-lead" id="authLead">登录后继续你的存档与棋谱。</p>
+          <p class="auth-lead" id="authLead">继续你的存档与棋谱。</p>
           <form id="authForm" novalidate>
             <label class="auth-field" for="authEmail">
               <span>邮箱</span>
@@ -72,18 +72,18 @@
             <p class="auth-error" id="authError" role="alert"></p>
             <button type="submit" class="btn btn-primary auth-submit" id="authSubmit">登录</button>
           </form>
-          <p class="auth-note">当前使用邮箱 + 密码登录，不发送验证邮件；忘记密码暂不支持自助找回。</p>
+          <p class="auth-note">邮箱仅作账号标识，不发送验证邮件。同一邮箱可用不同密码创建独立账户。</p>
         </section>
 
         <aside class="account-panel account-aside">
           <p class="panel-kicker">WHY ACCOUNT</p>
           <h2>把对局留下来</h2>
           <ul class="account-benefits">
-            <li><span>01</span><div><strong>云端存档</strong><p>保存同屏棋局，之后从账户里继续。</p></div></li>
-            <li><span>02</span><div><strong>联机棋谱</strong><p>登录后结束的联机对局会自动记录。</p></div></li>
-            <li><span>03</span><div><strong>离线照常</strong><p>不登录仍然可以即时开局，一切不变。</p></div></li>
+            <li><span>01</span><div><strong>云端存档</strong><p>保存同屏对局，换设备继续。</p></div></li>
+            <li><span>02</span><div><strong>联机棋谱</strong><p>终局自动归档，可回看每手。</p></div></li>
+            <li><span>03</span><div><strong>离线照常</strong><p>不登录也能即时开局。</p></div></li>
           </ul>
-          <p class="account-disclaimer">微信 / QQ 登录需要开发者应用资质与密钥，暂未接入。当前版本使用邮箱账户。</p>
+          <p class="account-disclaimer">微信 / QQ 登录暂未接入。</p>
         </aside>
       </div>
     </section>
@@ -108,7 +108,7 @@
       <div class="account-stats" aria-label="账户概览">
         <div><span>云端存档</span><strong id="localCount">0</strong><em>份</em></div>
         <div><span>联机棋谱</span><strong id="onlineCount">0</strong><em>局</em></div>
-        <div class="account-stats-note"><span>登录状态</span><strong>已连接</strong><em>云端</em></div>
+        
       </div>
 
       <section class="account-section" aria-labelledby="localHeading">
@@ -135,12 +135,12 @@
         </div>
         <div class="account-list" id="onlineList"></div>
         <div class="account-empty" id="onlineEmpty" hidden>
-          <p>还没有联机棋谱。登录后完成一局联机对局，会自动保存在这里。</p>
+          <p>完成一局联机对局后，会在这里留下棋谱。</p>
           <a href="./online.html">去联机</a>
         </div>
       </section>
 
-      <p class="account-footer-note">存档只对当前账户可见。联机进行中的房间仍由浏览器中的房间身份恢复。</p>
+      
     </section>
   </main>
 
@@ -162,6 +162,6 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./account.js?v=1.4.0"></script>
+  <script type="module" src="./account.js?v=1.5.0"></script>
 </body>
 </html>

@@ -39,7 +39,7 @@
 
 账户是**可选**的。不登录仍然可以同屏对局或输入房间码联机；登录只增加云端能力。
 
-- **邮箱 + 密码注册/登录**，昵称可自定义，无需邮箱验证邮件
+- **邮箱 + 密码注册/登录**，昵称可自定义，无需邮箱验证邮件；同一邮箱可用不同密码创建多个独立账户
 - **云端存档**：同屏模式下登录后出现「保存对局」，可反复更新；账户页可继续对局
 - **联机棋谱**：登录状态下结束的联机对局会自动保存棋谱；账户页可查看落子列表和终局结果
 - **离线仍可用**：不登录也能完整使用同屏和匿名联机
@@ -49,7 +49,8 @@
 
 当前限制：
 
-- 不发送邮箱验证邮件，也不支持忘记密码自助找回；请自行保管密码
+- 不发送邮箱验证邮件；忘记密码时可以用同一邮箱 + 新密码创建新账户，但旧账户及其存档仍保留在原密码下，不会自动迁移
+- 每个邮箱最多可创建 10 个独立账户
 - 微信 / QQ 登录需要开发者应用资质和应用密钥，本版本暂未接入
 - 登录后保存的是同屏模式的云端存档；联机进行中的对局需要同一浏览器中的房间身份
 
@@ -95,6 +96,8 @@ npm run test:account  # 账户/云存档 API 冒烟测试（会创建测试账�
 ```
 
 测试覆盖：
+
+- 同一邮箱多账户：不同密码注册、密码选择正确账户、存档相互隔离、重复密码拒绝；
 
 - 13 路 / 15 路预设布局的中心对称、四象限分布、切比雪夫距离、中心 3×3 为空、最外层有子且不过度贴边；
 - 联机 API：创建/加入房间、双方投票、服务端落子、悔棋审批、贴目审批、立即结算审批、认输与断线恢复；
@@ -151,6 +154,7 @@ npm run test:account  # 账户/云存档 API 冒烟测试（会创建测试账�
 ```bash
 cd online/worker
 npx wrangler d1 execute guqi-online --remote --file=schema.sql
+npx wrangler d1 execute guqi-online --remote --file=migrations/001_multi_account_email.sql  # 已有部署升级邮箱多账户
 npx wrangler secret put AUTH_PEPPER   # 至少 32 字符的随机值；现有部署已设置，不要随意更换
 npx wrangler deploy
 
@@ -227,6 +231,7 @@ online/worker/        # Cloudflare Worker + D1 权威后端
 online/pages/         # pages.dev API 反向代理
 tests/game.test.mjs   # Node 规则测试
 tests/account-api-smoke.mjs
+online/worker/migrations/
 scripts/build-single.mjs
 scripts/deploy.mjs    # GitHub API 发布脚本
 .github/workflows/    # GitHub Pages 自动部署

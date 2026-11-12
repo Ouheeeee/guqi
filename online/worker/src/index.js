@@ -22,6 +22,7 @@ const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PASSWORD_ITERATIONS = 100000;
 const MAX_STATE_LENGTH = 60000;
+const MAX_ACCOUNTS_PER_EMAIL = 10;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DUMMY_SALT = 'AAAAAAAAAAAAAAAAAAAAAA==';
 
@@ -292,8 +293,21 @@ async function registerUser(request, env, origin) {
   if (displayName.length < 1) throw new HttpError(400, '请输入昵称');
   if (password.length < 8) throw new HttpError(400, '密码至少需要 8 个字符');
   if (password.length > 128) throw new HttpError(400, '密码太长了');
-  const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-  if (existing) throw new HttpError(409, '这个邮箱已经注册过');
+  const existingRows = await env.DB.prepare(
+    'SELECT * FROM users WHERE email = ? ORDER BY created_at DESC LIMIT ?',
+  ).bind(email, MAX_ACCOUNTS_PER_EMAIL + 1).all();
+  const existingAccounts = existingRows.results || [];
+  if (existingAccounts.length > MAX_ACCOUNTS_PER_EMAIL) {
+    throw new HttpError(409, '这个邮箱下的账户数量已达上限');
+  }
+  for (const account of existingAccounts) {
+    const existingHash = await passwordDigest(
+      env, email, password, account.password_salt, Number(account.password_iterations),
+    );
+    if (safeEqual(existingHash, account.password_hash)) {
+      throw new HttpError(409, '这个邮箱下已有使用该密码的账户，请直接登录');
+    }
+  }
 
   const salt = randomSalt();
   const hash = await passwordDigest(env, email, password, salt, PASSWORD_ITERATIONS);
@@ -319,17 +333,27 @@ async function loginUser(request, env, origin) {
   const email = normalizeEmail(body.email);
   const password = typeof body.password === 'string' ? body.password : '';
   if (!EMAIL_PATTERN.test(email) || !password) throw new HttpError(401, '邮箱或密码不正确');
-  const row = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
-  if (!row) {
+  const rows = await env.DB.prepare(
+    'SELECT * FROM users WHERE email = ? ORDER BY created_at DESC LIMIT ?',
+  ).bind(email, MAX_ACCOUNTS_PER_EMAIL).all();
+  const accounts = rows.results || [];
+  if (!accounts.length) {
     await passwordDigest(env, email, password, DUMMY_SALT, PASSWORD_ITERATIONS);
     throw new HttpError(401, '邮箱或密码不正确');
   }
-  const hash = await passwordDigest(
-    env, email, password, row.password_salt, Number(row.password_iterations),
-  );
-  if (!safeEqual(hash, row.password_hash)) throw new HttpError(401, '邮箱或密码不正确');
-  const token = await createAccountSession(env, row.id);
-  return response({ user: publicUser(row), token }, 200, origin, env);
+  let matched = null;
+  for (const account of accounts) {
+    const hash = await passwordDigest(
+      env, email, password, account.password_salt, Number(account.password_iterations),
+    );
+    if (safeEqual(hash, account.password_hash)) {
+      matched = account;
+      break;
+    }
+  }
+  if (!matched) throw new HttpError(401, '邮箱或密码不正确');
+  const token = await createAccountSession(env, matched.id);
+  return response({ user: publicUser(matched), token }, 200, origin, env);
 }
 
 async function logoutUser(request, env, origin) {

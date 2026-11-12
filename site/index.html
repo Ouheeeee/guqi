@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.4.0">
+  <link rel="stylesheet" href="./styles.css?v=1.5.0">
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true" width="0" height="0">
@@ -65,9 +65,7 @@
       <span class="topbar-divider" aria-hidden="true"></span>
       <a class="topbar-link" href="./online.html">联机对战 <span aria-hidden="true">↗</span></a>
       <span class="topbar-divider" aria-hidden="true"></span>
-      <a class="topbar-link" id="accountLink" href="./account.html">登录</a>
-      <span class="topbar-divider" aria-hidden="true"></span>
-      <span class="topbar-note">无需登录 · 即时开局</span>
+      <a class="topbar-link topbar-account" id="accountLink" href="./account.html">登录</a>
     </div>
   </header>
 
@@ -198,7 +196,7 @@
           </button>
         </div>
 
-        <p class="action-note">「立即结算」按当前孤棋数直接判定；「新开局」保留本场并新开一场；连续点击对局标签上的 × 两次可关闭。</p>
+        <p class="action-note">「新开局」保留本场；登录后可保存到云端。</p>
 
         <div class="size-row">
           <span class="size-label">棋盘</span>
@@ -227,33 +225,33 @@
           <h2 id="rulesHeading">规则</h2>
           <span class="panel-kicker">HOW TO WIN</span>
         </div>
-        <p class="rule-lead">相连成块，一块计一间。终局按先手贴目后的间数判定。</p>
+        <p class="rule-lead">相连成块，一块一间。终局按贴目后间数判定。</p>
         <ol class="rule-list">
           <li>
             <span class="rule-no">01</span>
-            <p><strong>相连</strong>横竖相邻的同色棋组成一个连通块，斜角不算。</p>
+            <p><strong>相连</strong>横竖相邻同色成块，斜角不算。</p>
           </li>
           <li>
             <span class="rule-no">02</span>
-            <p><strong>计间</strong>每个连通块计 1 间，黑白分别累计，实时更新。</p>
+            <p><strong>计间</strong>每块计 1 间，黑白实时累计。</p>
           </li>
           <li>
             <span class="rule-no">03</span>
-            <p><strong>终局</strong>棋盘填满后，按先手贴目后的间数少者胜；原始间数相同或贴目后同数，均由后手白方获胜。</p>
+            <p><strong>终局</strong>填满后按贴目后间数少者胜；同数白胜。</p>
           </li>
           <li>
             <span class="rule-no">04</span>
-            <p><strong>贴目</strong>先手可贴 0.5 / 1 / 1.5 间，可随时切换，只影响终局结算。</p>
+            <p><strong>贴目</strong>0.5 / 1 / 1.5 间，只影响终局。</p>
           </li>
         </ol>
         <details class="preset-details">
           <summary>预设布局：最外层必有子 · 均匀择优</summary>
           <ul>
-            <li>黑白整体中心对称，且四象限内双方均有棋子。</li>
-            <li>任意两子切比雪夫距离不小于 2，最外层至少有一枚预设子。</li>
-            <li>棋盘中心 3 × 3 区域保持为空。</li>
-            <li>多组随机候选择优，让棋子分布均匀，避免全部向边缘集中或同色扎堆。</li>
-            <li>13 路各 6 子，15 路各 7 子，每局随机生成。</li>
+            <li>中心对称，四象限均有黑白子。</li>
+            <li>任意两子距离 ≥ 2，最外层至少一子。</li>
+            <li>中心 3 × 3 为空。</li>
+            <li>随机择优，分布更均匀。</li>
+            <li>13 路各 6 子 / 15 路各 7 子。</li>
           </ul>
         </details>
       </section>
@@ -262,7 +260,7 @@
 
   <footer class="footer">
     <span>孤棋 · 双人同屏</span>
-    <span>纯前端对局 · 刷新页面即清空棋局</span>
+    <span>双人同屏 · 登录后可保存</span>
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -300,6 +298,6 @@
     </section>
   </div>
 
-  <script type="module" src="./app.js?v=1.4.0"></script>
+  <script type="module" src="./app.js?v=1.5.0"></script>
 </body>
 </html>

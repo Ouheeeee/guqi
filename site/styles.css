@@ -2133,3 +2133,128 @@ h1 {
 .topbar-link span {
   color: var(--muted-soft);
 }
+
+/* ------------------------------------------------------------------ */
+/* Motion and account entry                                           */
+/* ------------------------------------------------------------------ */
+
+@keyframes guqi-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes guqi-rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes guqi-item {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes guqi-modal {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes guqi-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page,
+.online-main,
+.account-main {
+  animation: guqi-page-in 0.48s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+.btn {
+  transition:
+    transform 0.18s cubic-bezier(0.22, 0.8, 0.24, 1),
+    box-shadow 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.btn:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.btn:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.topbar-link {
+  position: relative;
+  padding: 3px 0;
+  transition: color 0.18s ease;
+}
+
+.topbar-link::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.22s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.topbar-link:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.topbar-account {
+  padding: 5px 10px !important;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.topbar-account::after {
+  display: none;
+}
+
+.topbar-account:hover {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.panel,
+.board-panel,
+.online-card,
+.account-panel {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .online-main,
+  .account-main {
+    animation: none !important;
+  }
+
+  .btn,
+  .topbar-link,
+  .topbar-link::after,
+  .topbar-account {
+    transition: none !important;
+  }
+
+  .btn:not(:disabled):hover,
+  .btn:not(:disabled):active {
+    transform: none;
+  }
+}

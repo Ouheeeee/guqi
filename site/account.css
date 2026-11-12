@@ -348,7 +348,7 @@
 
 .account-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1px;
   overflow: hidden;
   margin-bottom: 28px;
@@ -384,13 +384,6 @@
   font-style: normal;
 }
 
-.account-stats .account-stats-note strong {
-  color: #5b7c60;
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: 0.03em;
-}
 
 .account-section {
   margin-top: 28px;
@@ -592,7 +585,7 @@
 
 .record-moves {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 3px 10px;
   margin: 0;
   padding: 12px 0 0;
@@ -728,10 +721,6 @@
     padding: 12px 13px;
   }
 
-  .account-stats > div:last-child {
-    grid-column: 1 / -1;
-    min-height: 0;
-  }
 
   .account-section {
     margin-top: 23px;
@@ -773,5 +762,36 @@
   .account-footer-note {
     text-align: left;
     line-height: 1.6;
+  }
+}
+
+
+/* Motion: account views and list items */
+
+.account-auth,
+.account-dashboard {
+  animation: guqi-rise 0.5s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+.account-item {
+  animation: guqi-item 0.38s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+  animation-delay: calc(var(--i, 0) * 38ms);
+}
+
+.account-modal-backdrop {
+  animation: guqi-fade 0.22s ease both;
+}
+
+.account-modal-card {
+  animation: guqi-modal 0.28s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-auth,
+  .account-dashboard,
+  .account-item,
+  .account-modal-card,
+  .account-modal-backdrop {
+    animation: none !important;
   }
 }

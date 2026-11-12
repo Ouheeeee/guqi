@@ -6,7 +6,7 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.4.0';
+} from './auth-client.js?v=1.5.0';
 import {
   BLACK,
   WHITE,
@@ -15,7 +15,7 @@ import {
   formatNumber,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.4.0';
+} from './game.js?v=1.5.0';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -132,11 +132,11 @@ function setAuthMode(mode) {
   dom.loginTab.setAttribute('aria-selected', String(!registering));
   dom.registerTab.setAttribute('aria-selected', String(registering));
   dom.authTitle.textContent = registering ? '建立你的账户' : '欢迎回来';
-  dom.authLead.textContent = registering ? '注册后即可保存同屏对局，并在联机终局后留下棋谱。' : '登录后继续你的存档与棋谱。';
+  dom.authLead.textContent = registering ? '同一邮箱可用不同密码创建独立账户。' : '继续你的存档与棋谱。';
   dom.displayNameField.hidden = !registering;
   dom.authDisplayName.required = registering;
   dom.authPassword.autocomplete = registering ? 'new-password' : 'current-password';
-  dom.authPasswordHint.textContent = registering ? '密码至少 8 个字符，请自行妥善保管。' : '登录已有账户。';
+  dom.authPasswordHint.textContent = registering ? '密码至少 8 个字符。' : '登录已有账户。';
   dom.authSubmit.textContent = registering ? '注册并登录' : '登录';
   setAuthError();
 }
@@ -231,6 +231,9 @@ function renderLibrary() {
   dom.onlineCount.textContent = String(online.length);
   dom.localList.replaceChildren(...local.map(renderLocalGame));
   dom.onlineList.replaceChildren(...online.map(renderOnlineGame));
+  for (const list of [dom.localList, dom.onlineList]) {
+    [...list.children].forEach((item, index) => item.style.setProperty('--i', String(index)));
+  }
   dom.localEmpty.hidden = local.length > 0;
   dom.onlineEmpty.hidden = online.length > 0;
 }

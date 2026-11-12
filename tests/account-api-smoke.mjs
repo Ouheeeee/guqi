@@ -27,18 +27,33 @@ async function ok(path, options) {
 }
 
 const email = `guqi-test-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
-const password = 'test-password-8';
-const register = await ok('/api/auth/register', {
+const passwordA = 'test-password-8';
+const passwordB = 'test-password-9';
+const registerA = await ok('/api/auth/register', {
   method: 'POST',
-  body: { email, password, displayName: '测试棋手' },
+  body: { email, password: passwordA, displayName: '第一个账户' },
 });
-assert.equal(register.user.email, email);
-assert.equal(register.user.displayName, '测试棋手');
-assert.ok(register.token);
-const accountToken = register.token;
+assert.equal(registerA.user.email, email);
+assert.equal(registerA.user.displayName, '第一个账户');
+assert.ok(registerA.token);
+const accountToken = registerA.token;
 
 const me = await ok('/api/auth/me', { token: accountToken });
-assert.equal(me.user.id, register.user.id);
+assert.equal(me.user.id, registerA.user.id);
+
+const registerB = await ok('/api/auth/register', {
+  method: 'POST',
+  body: { email, password: passwordB, displayName: '第二个账户' },
+});
+assert.notEqual(registerB.user.id, registerA.user.id);
+assert.equal(registerB.user.email, email);
+const secondToken = registerB.token;
+
+const duplicatePassword = await request('/api/auth/register', {
+  method: 'POST',
+  body: { email, password: passwordA, displayName: '重复密码' },
+});
+assert.equal(duplicatePassword.response.status, 409);
 
 const wrong = await request('/api/auth/login', {
   method: 'POST',
@@ -46,12 +61,17 @@ const wrong = await request('/api/auth/login', {
 });
 assert.equal(wrong.response.status, 401);
 
-const login = await ok('/api/auth/login', {
+const loginA = await ok('/api/auth/login', {
   method: 'POST',
-  body: { email, password },
+  body: { email, password: passwordA },
 });
-assert.equal(login.user.id, register.user.id);
-const loginToken = login.token;
+assert.equal(loginA.user.id, registerA.user.id);
+const loginB = await ok('/api/auth/login', {
+  method: 'POST',
+  body: { email, password: passwordB },
+});
+assert.equal(loginB.user.id, registerB.user.id);
+const loginToken = loginA.token;
 
 let state = startGame(createGame(13, { komi: 1 }));
 for (let move = 0; move < 3; move += 1) {
@@ -68,6 +88,8 @@ assert.equal(saved.game.moves, 3);
 
 const list = await ok('/api/games', { token: accountToken });
 assert.ok(list.games.some((game) => game.id === saved.game.id));
+const secondList = await ok('/api/games', { token: secondToken });
+assert.equal(secondList.games.length, 0, '同邮箱的另一个账户不应看到这个存档');
 const detail = await ok(`/api/games/${saved.game.id}`, { token: accountToken });
 assert.equal(detail.game.state.history.length, 3);
 assert.equal(detail.game.state.board.length, 169);
