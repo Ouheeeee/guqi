@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#efede6">
+  <meta name="description" content="孤棋联机对战：创建房间或输入房间码，与朋友在线下一盘孤棋。系统生成布局，双方同意后开始。">
+  <title>孤棋 · 联机对战</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=1.3.0">
+  <link rel="stylesheet" href="./online.css?v=1.3.0">
+</head>
+<body class="online-body">
+  <a class="skip-link" href="#onlineMain">跳到联机大厅</a>
+  <header class="topbar">
+    <div class="brand" aria-label="孤棋">
+      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+        <rect x="1" y="1" width="42" height="42" rx="13" fill="#171614"/>
+        <circle cx="15.5" cy="15.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="28.5" cy="28.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="15.5" cy="28.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="28.5" cy="15.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="22" cy="22" r="1.3" fill="#f8f6ef" opacity=".55"/>
+      </svg>
+      <div class="brand-copy">
+        <span class="brand-cn">孤棋</span>
+        <span class="brand-en">GU QI · SOLITUDE</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-chip"><span class="chip-dot" aria-hidden="true"></span>联机对战</span>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <a class="topbar-link" href="./index.html">同屏对战 <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main class="online-main" id="onlineMain">
+    <section class="online-lobby" id="lobbyView">
+      <div class="online-hero">
+        <p class="eyebrow"><span>ONLINE</span><span class="eyebrow-rule" aria-hidden="true"></span><span>REAL-TIME DUEL</span></p>
+        <h1>隔着屏幕，<br>下一盘安静的棋。</h1>
+        <p class="online-hero-sub">创建房间，把房间码或邀请链接发给朋友。系统生成开局布局，双方都同意后才开始对局。</p>
+        <div class="online-hero-meta">
+          <span><i aria-hidden="true"></i>无需注册</span>
+          <span><i aria-hidden="true"></i>双人确认</span>
+          <span><i aria-hidden="true"></i>刷新可恢复</span>
+        </div>
+      </div>
+
+      <div class="online-lobby-grid">
+        <form class="online-card" id="createForm">
+          <div class="online-card-head">
+            <span class="online-card-no">01</span>
+            <h2>创建房间</h2>
+            <p>你执黑先行。布局由系统生成，双方都同意后才开始。</p>
+          </div>
+          <div class="online-field">
+            <span class="online-field-label">棋盘</span>
+            <div class="segmented online-segmented" id="createSizeControl" role="group" aria-label="选择棋盘尺寸">
+              <button type="button" data-create-size="13" aria-pressed="true"><span>13 × 13</span><small>6 + 6 预设</small></button>
+              <button type="button" data-create-size="15" aria-pressed="false"><span>15 × 15</span><small>7 + 7 预设</small></button>
+            </div>
+          </div>
+          <div class="online-field">
+            <span class="online-field-label">先手贴</span>
+            <div class="segmented online-segmented online-komi-seg" id="createKomiControl" role="group" aria-label="选择先手贴目">
+              <button type="button" data-create-komi="0.5" aria-pressed="true">0.5 间</button>
+              <button type="button" data-create-komi="1" aria-pressed="false">1 间</button>
+              <button type="button" data-create-komi="1.5" aria-pressed="false">1.5 间</button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary online-submit" id="createBtn">
+            <span>创建房间</span><span class="btn-hint">生成房间码</span>
+          </button>
+          <p class="online-error" id="createError" role="alert"></p>
+        </form>
+
+        <form class="online-card" id="joinForm">
+          <div class="online-card-head">
+            <span class="online-card-no">02</span>
+            <h2>加入房间</h2>
+            <p>输入朋友发来的六位房间码，加入后请先确认系统生成的布局。</p>
+          </div>
+          <label class="online-field online-code-field" for="joinCode">
+            <span class="online-field-label">房间码</span>
+            <input id="joinCode" name="room" type="text" inputmode="text" autocomplete="off" spellcheck="false" maxlength="6" placeholder="例如 A7K2M9" aria-describedby="joinHint" />
+          </label>
+          <p class="online-input-hint" id="joinHint">不区分大小写 · 6 位字母数字</p>
+          <button type="submit" class="btn btn-primary online-submit" id="joinBtn">
+            <span>加入对局</span><span class="btn-hint">进入房间</span>
+          </button>
+          <p class="online-error" id="joinError" role="alert"></p>
+        </form>
+      </div>
+      <p class="online-note">联机房间为匿名邀请制。房间状态保留约 7 天。</p>
+    </section>
+
+    <section class="online-room" id="roomView" hidden>
+      <div class="online-room-head">
+        <div class="online-room-title-wrap">
+          <button type="button" class="online-back" id="backBtn">← 返回大厅</button>
+          <p class="eyebrow"><span>ROOM</span><span class="eyebrow-rule" aria-hidden="true"></span><span id="roomCodeLabel">------</span></p>
+          <h1 id="roomTitle">等待对手加入</h1>
+          <p class="status-sub" id="roomSub">把房间码发给朋友，对方加入后即可确认布局。</p>
+        </div>
+        <div class="room-code-card">
+          <span class="room-code-label">房间码</span>
+          <strong id="roomCodeDisplay">------</strong>
+          <button type="button" class="btn btn-soft" id="copyLinkBtn">复制邀请链接</button>
+        </div>
+      </div>
+
+      <div class="online-grid">
+        <section class="online-board-col" aria-label="联机棋盘">
+          <div class="board-shell online-board-shell" id="onlineBoardShell">
+            <div id="onlineCoordTop" class="coords coords-top" aria-hidden="true"></div>
+            <div id="onlineCoordLeft" class="coords coords-left" aria-hidden="true"></div>
+            <div id="onlineBoard" class="board online-board" data-phase="waiting" role="group" aria-label="联机棋盘"></div>
+          </div>
+          <div class="board-foot">
+            <span class="last-move"><span class="last-move-mark" aria-hidden="true"></span><span id="onlineLastMove">等待对手加入</span></span>
+            <span class="foot-rule" id="onlineRuleShort">13 路 · 贴 0.5 间</span>
+          </div>
+        </section>
+
+        <aside class="online-sidebar">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>对局玩家</h2>
+              <span class="panel-kicker" id="onlinePhaseKicker">WAITING</span>
+            </div>
+            <div class="online-player" id="hostPlayer">
+              <span class="stone-icon stone-icon-black" aria-hidden="true"></span>
+              <div class="online-player-copy">
+                <strong>房主 · 黑方</strong>
+                <span class="online-player-sub">先手</span>
+              </div>
+              <span class="vote-badge" id="hostVoteBadge">待表态</span>
+              <span class="online-presence" id="hostPresence">在线</span>
+            </div>
+            <div class="online-player" id="guestPlayer">
+              <span class="stone-icon stone-icon-white" aria-hidden="true"></span>
+              <div class="online-player-copy">
+                <strong>对手 · 白方</strong>
+                <span class="online-player-sub">后手</span>
+              </div>
+              <span class="vote-badge" id="guestVoteBadge">待表态</span>
+              <span class="online-presence" id="guestPresence">未加入</span>
+            </div>
+            <div class="online-rule-line"><span>规则</span><strong id="onlineRule">13 路 · 先手贴 0.5 间</strong></div>
+          </section>
+
+          <section class="panel online-phase-panel" id="waitingPanel">
+            <div class="online-panel-head">
+              <h2>等待对手</h2>
+              <span class="phase-badge" data-phase="ready"><span aria-hidden="true"></span><span>等待加入</span></span>
+            </div>
+            <p class="online-panel-lead">房间已经创建。把房间码或邀请链接发给朋友，对方加入后系统会进入布局确认。</p>
+            <div class="online-waiting-code" id="waitingCode">------</div>
+            <button type="button" class="btn btn-soft" id="waitingCopyBtn">复制邀请链接</button>
+            <button type="button" class="text-button" id="waitingNewLayoutBtn">换一张预设布局</button>
+          </section>
+
+          <section class="panel online-phase-panel" id="votingPanel" hidden>
+            <div class="online-panel-head">
+              <h2>确认预设布局</h2>
+              <span class="phase-badge" data-phase="ready"><span aria-hidden="true"></span><span>双方确认</span></span>
+            </div>
+            <p class="online-panel-lead">系统已生成布局。双方都可以同意或不同意；只有双方都同意，对局才会开始。</p>
+            <div class="online-vote-grid">
+              <div><span>你</span><strong id="yourVoteText">待表态</strong></div>
+              <div><span>对方</span><strong id="opponentVoteText">待表态</strong></div>
+            </div>
+            <div class="online-vote-actions">
+              <button type="button" class="btn btn-primary" id="approveBtn">同意采用</button>
+              <button type="button" class="btn btn-soft" id="rejectBtn">不同意</button>
+            </div>
+            <button type="button" class="text-button" id="newLayoutBtn">让系统换一张布局</button>
+            <p class="online-panel-hint">对方能看到你的选择。双方同意后立即开始，房主执黑。</p>
+          </section>
+
+          <section class="panel online-phase-panel" id="playingPanel" hidden>
+            <div class="online-panel-head">
+              <h2 id="turnTitle">轮到你落子</h2>
+              <span class="phase-badge" data-phase="playing"><span aria-hidden="true"></span><span>对局中</span></span>
+            </div>
+            <div class="online-score-strip">
+              <div class="online-score online-score-black"><span>黑方</span><strong id="onlineBlackCount">6</strong><em>间</em></div>
+              <div class="online-score-divider" aria-hidden="true"></div>
+              <div class="online-score online-score-white"><span>白方</span><strong id="onlineWhiteCount">6</strong><em>间</em></div>
+            </div>
+            <div class="pending-box" id="pendingBox" hidden>
+              <p id="pendingText"></p>
+              <div class="pending-actions" id="pendingActions" hidden>
+                <button type="button" class="btn btn-primary" id="acceptPendingBtn">同意</button>
+                <button type="button" class="btn btn-soft" id="rejectPendingBtn">拒绝</button>
+              </div>
+            </div>
+            <div class="online-primary-actions">
+              <button type="button" class="btn btn-soft" id="undoBtn">请求悔棋</button>
+              <button type="button" class="btn btn-soft" id="resignBtn">认输</button>
+            </div>
+            <div class="online-komi-request">
+              <span>申请调整贴目</span>
+              <div class="online-komi-options" id="komiRequestButtons">
+                <button type="button" data-komi-request="0.5">0.5 间</button>
+                <button type="button" data-komi-request="1">1 间</button>
+                <button type="button" data-komi-request="1.5">1.5 间</button>
+              </div>
+            </div>
+            <p class="online-panel-hint" id="actionHint">轮到你时点击棋盘空格落子。</p>
+          </section>
+
+          <section class="panel online-phase-panel online-result-panel" id="endPanel" hidden>
+            <p class="eyebrow">GAME OVER</p>
+            <h2 class="online-result-title" id="onlineResultTitle">对局结束</h2>
+            <p class="online-panel-lead" id="onlineResultDesc"></p>
+            <div class="online-score-strip">
+              <div class="online-score online-score-black"><span>黑方</span><strong id="resultBlackCount">6</strong><em>间</em></div>
+              <div class="online-score-divider" aria-hidden="true"></div>
+              <div class="online-score online-score-white"><span>白方</span><strong id="resultWhiteCount">6</strong><em>间</em></div>
+            </div>
+            <p class="online-result-komi" id="onlineResultKomi"></p>
+            <button type="button" class="btn btn-primary" id="resultBackBtn">返回大厅</button>
+          </section>
+
+          <div class="online-room-footer">
+            <span>房间码 <strong id="roomCodeTiny">------</strong></span>
+            <button type="button" class="text-button" id="leaveBtn">离开房间</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>孤棋 · 联机对战</span>
+    <span>房间匿名邀请 · 对局状态自动保存</span>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./online.js?v=1.3.0"></script>
+</body>
+</html>

@@ -4,3 +4,7 @@ node_modules/
 .DS_Store
 .deploy/
 dist/
+.wrangler/
+online/worker/.wrangler/
+online/worker/.dry-run/
+online/pages/.wrangler/

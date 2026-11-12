@@ -2096,3 +2096,21 @@ h1 {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Shared cross-page link */
+.topbar-link {
+  color: var(--graphite);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.16s ease;
+}
+
+.topbar-link:hover {
+  color: var(--ink);
+}
+
+.topbar-link span {
+  color: var(--muted-soft);
+}

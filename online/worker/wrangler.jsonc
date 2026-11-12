@@ -1,0 +1,17 @@
+{
+  "name": "guqi-online",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "guqi-online",
+      "database_id": "4b0819d9-8974-48cc-b75d-e0b78910cc5e"
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://ouheeeee.github.io,http://127.0.0.1:4173,http://127.0.0.1:4174,http://localhost:4173,http://localhost:4174,http://127.0.0.1:3000,http://localhost:3000"
+  }
+}

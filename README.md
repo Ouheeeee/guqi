@@ -3,16 +3,35 @@
 [![Deploy GitHub Pages](https://github.com/Ouheeeee/guqi/actions/workflows/pages.yml/badge.svg)](https://github.com/Ouheeeee/guqi/actions/workflows/pages.yml)
 [![Live site](https://img.shields.io/badge/live-GitHub%20Pages-171614)](https://ouheeeee.github.io/guqi/)
 
-一款双人同屏的极简连线围棋变体。支持三种先手贴目规则、最多 6 场并行对局，纯前端实现，不需要后端、登录或数据库。
+一款支持**同屏双人**和**在线联机**的极简连线围棋变体。支持三种先手贴目、系统预设布局双确认和最多 6 场同屏对局。
 
 ![孤棋界面预览](./preview.jpg)
 
 ## 在线访问
 
-- **GitHub Pages：<https://ouheeeee.github.io/guqi/>**
+- **联机对战：<https://ouheeeee.github.io/guqi/online.html>**
+- **同屏对战：<https://ouheeeee.github.io/guqi/>**
 - **GitHub 仓库：<https://github.com/Ouheeeee/guqi>**
 
 网站内容公开展示，请勿将私人信息放入对局页面。
+
+## 联机对战
+
+联机模式使用 **Cloudflare Workers + D1** 作为服务端，前端仍然部署在 GitHub Pages：
+
+- 创建房间或输入 6 位房间码加入，匿名邀请制，无需注册
+- 服务端生成预设布局；双方会看到同一盘布局
+- 双方都可以选择“同意采用”或“不同意”，对方的表态实时可见
+- **只有双方都同意后，服务端才会开始对局**；房主执黑先行
+- 落子由服务端校验轮次、空格和棋局状态
+- 悔棋、局中贴目调整都需要对方同意
+- 认输由服务端立即结算
+- 刷新页面可通过本机房间 token 恢复房间；房间状态保留约 7 天
+- 服务端只保存 token 的 SHA-256 哈希，不保存明文 token
+
+联机 API（Pages Functions 反代）：<https://guqi-online-api.pages.dev>
+
+> 联机 API 的上游 Worker 位于 `workers.dev`，部分网络无法直接访问，因此通过可访问的 `pages.dev` 反向代理暴露 API；玩家只需要访问 GitHub Pages 页面。
 
 ## 功能
 
@@ -40,12 +59,14 @@ npx serve site
 ## 测试
 
 ```bash
-npm test
+npm test          # 规则单元测试
+npm run test:online  # 联机 API 冒烟测试（会创建真实房间）
 ```
 
 测试覆盖：
 
 - 13 路 / 15 路预设布局的中心对称、四象限分布、切比雪夫距离、中心 3×3 为空、最外层有子且不过度贴边；
+- 联机 API：创建/加入房间、双方投票、服务端落子、悔棋审批、贴目审批、认输与断线恢复；
 - 横竖连通块计数与斜角不连通；
 - 三种先手贴目规则、原始同数与贴目同数的裁定；
 - 每场对局独立保存贴目，终局后切换规则可重新裁定；
@@ -85,6 +106,23 @@ npm test
 仓库已配置 [`.github/workflows/pages.yml`](.github/workflows/pages.yml)：推送到 `main` 分支后，GitHub Actions 会自动把 `site/` 发布到 GitHub Pages。
 
 线上地址：<https://ouheeeee.github.io/guqi/>
+
+联机页面：<https://ouheeeee.github.io/guqi/online.html>
+
+### Cloudflare 联机后端
+
+后端代码在 `online/worker/`，公开 API 反代在 `online/pages/functions/`。首次部署或修改 Worker 后执行：
+
+```bash
+cd online/worker
+npx wrangler d1 execute guqi-online --remote --file=schema.sql
+npx wrangler deploy
+
+cd ../pages
+npx wrangler pages deploy public --project-name guqi-online-api --branch main
+```
+
+Cloudflare 账号和 D1 数据库已经配置好；密钥、OAuth token 不进入仓库。
 
 #### 在任意新对话 / 新环境发布
 
@@ -139,12 +177,18 @@ npx @shipstatic/ship ./site
 
 ```text
 site/                 # 可直接部署的静态站点
-  index.html
+  index.html          # 同屏对战
+  online.html         # 联机大厅与房间
   styles.css
+  online.css
   game.js             # 规则引擎、贴目与随机布局生成
-  app.js              # 多场对局管理、交互与渲染
+  app.js              # 同屏多场对局
+  online.js           # 联机客户端
+online/worker/        # Cloudflare Worker + D1 权威后端
+online/pages/         # pages.dev API 反向代理
 tests/game.test.mjs   # Node 规则测试
 scripts/build-single.mjs
+scripts/deploy.mjs    # GitHub API 发布脚本
 .github/workflows/    # GitHub Pages 自动部署
 ```
 
