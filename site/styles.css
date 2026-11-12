@@ -1235,6 +1235,19 @@ h1 {
   margin-top: 7px;
 }
 
+.action-grid .action-wide {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+.btn-inline-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
 .action-note {
   margin: 10px 1px 0;
   color: var(--muted-soft);

@@ -6,7 +6,7 @@ import {
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.3.0';
+} from './game.js?v=1.3.1';
 
 const API_BASE = 'https://guqi-online-api.pages.dev';
 const TOKEN_PREFIX = 'guqi.online.token.';
@@ -70,6 +70,7 @@ const dom = {
   acceptPendingBtn: $('#acceptPendingBtn'),
   rejectPendingBtn: $('#rejectPendingBtn'),
   undoBtn: $('#undoBtn'),
+  settleBtn: $('#settleBtn'),
   resignBtn: $('#resignBtn'),
   komiRequestButtons: Array.from(document.querySelectorAll('[data-komi-request]')),
   actionHint: $('#actionHint'),
@@ -477,6 +478,7 @@ function renderPhasePanels() {
   const yourTurn = room.phase === 'playing' && room.turn === room.youColor;
   dom.turnTitle.textContent = yourTurn ? '轮到你落子' : '等待对方落子';
   dom.undoBtn.disabled = actionInFlight || !room.canRequestUndo;
+  dom.settleBtn.disabled = actionInFlight || !room.canRequestSettle;
   dom.resignBtn.disabled = actionInFlight;
   for (const button of dom.komiRequestButtons) {
     const value = Number(button.dataset.komiRequest);
@@ -496,23 +498,27 @@ function renderPending() {
   }
   const byYou = pending.by === room.you;
   const isUndo = pending.kind === 'undo';
-  const byName = byYou ? '你' : '对方';
+  const isSettle = pending.kind === 'settle';
   if (isUndo) {
     dom.pendingText.textContent = byYou
       ? '你已请求悔棋，正在等待对方确认。'
       : '对方请求悔棋，是否同意撤销上一手？';
+  } else if (isSettle) {
+    dom.pendingText.textContent = byYou
+      ? '你已请求按当前孤棋数立即结算，等待对方确认。'
+      : '对方请求按当前孤棋数立即结算，是否同意？';
   } else {
     dom.pendingText.textContent = byYou
       ? `你已申请将先手贴目调整为 ${formatNumber(pending.value)} 间，等待对方确认。`
       : `对方申请将先手贴目调整为 ${formatNumber(pending.value)} 间，是否同意？`;
   }
   dom.pendingActions.hidden = byYou;
-  dom.acceptPendingBtn.textContent = isUndo ? '同意悔棋' : '同意变更';
+  dom.acceptPendingBtn.textContent = isUndo ? '同意悔棋' : isSettle ? '同意结算' : '同意变更';
   dom.rejectPendingBtn.textContent = '拒绝';
 
   const key = `${pending.kind}:${pending.by}:${pending.value ?? ''}`;
   if (lastPendingKey !== key && !byYou) {
-    showToast(isUndo ? '对方发来悔棋请求' : '对方发来贴目变更请求');
+    showToast(isUndo ? '对方发来悔棋请求' : isSettle ? '对方发来立即结算请求' : '对方发来贴目变更请求');
   }
   lastPendingKey = key;
 }
@@ -690,7 +696,11 @@ function copyInvite() {
 async function respondPending(accept) {
   if (!room?.pending) return;
   const pending = room.pending;
-  const type = pending.kind === 'undo' ? 'respond-undo' : 'respond-komi';
+  const type = pending.kind === 'undo'
+    ? 'respond-undo'
+    : pending.kind === 'settle'
+      ? 'respond-settle'
+      : 'respond-komi';
   await sendAction({ type, accept }, accept ? '已同意' : '已拒绝');
   pollAfterAction();
 }
@@ -733,6 +743,10 @@ function bindEvents() {
   });
   dom.undoBtn.addEventListener('click', () => {
     sendAction({ type: 'request-undo' }, '已发送悔棋请求');
+    pollAfterAction();
+  });
+  dom.settleBtn.addEventListener('click', () => {
+    sendAction({ type: 'request-settle' }, '已发送结算请求，等待对方确认');
     pollAfterAction();
   });
   dom.resignBtn.addEventListener('click', () => {

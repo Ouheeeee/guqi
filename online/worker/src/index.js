@@ -7,6 +7,7 @@ import {
   placeStone,
   undoMove,
   setKomi,
+  settleGame,
   groupCounts,
   judgeScores,
   analyzeGroups,
@@ -172,6 +173,7 @@ function publicState(row, state, seat) {
     pending: state.pending || null,
     canRequestUndo,
     canRequestKomi: state.phase === 'playing' && !state.pending,
+    canRequestSettle: state.phase === 'playing' && !state.pending,
     komiOptions: [...KOMI_OPTIONS],
   };
 }
@@ -332,6 +334,25 @@ function actionRespondKomi(state, action, seat) {
   state.pending = null;
 }
 
+function actionRequestSettle(state, seat) {
+  assertPlaying(state);
+  assertNoPending(state);
+  state.pending = { kind: 'settle', by: seat };
+}
+
+function actionRespondSettle(state, action, seat) {
+  assertPlaying(state);
+  const pending = state.pending;
+  if (!pending || pending.kind !== 'settle') throw new HttpError(409, '没有待处理的结算请求');
+  if (pending.by === seat) throw new HttpError(403, '不能自己同意自己的请求');
+  if (typeof action.accept !== 'boolean') throw new HttpError(400, '请选择同意或拒绝');
+  if (action.accept) {
+    state.game = settleGame(state.game);
+    state.phase = 'ended';
+  }
+  state.pending = null;
+}
+
 function applyAction(state, action, row, seat) {
   switch (action.type) {
     case 'vote': actionVote(state, action, row, seat); break;
@@ -343,6 +364,8 @@ function applyAction(state, action, row, seat) {
     case 'respond-undo': actionRespondUndo(state, action, seat); break;
     case 'request-komi': actionRequestKomi(state, action, seat); break;
     case 'respond-komi': actionRespondKomi(state, action, seat); break;
+    case 'request-settle': actionRequestSettle(state, seat); break;
+    case 'respond-settle': actionRespondSettle(state, action, seat); break;
     default: throw new HttpError(400, '未知操作');
   }
 }

@@ -473,6 +473,11 @@ export function setKomi(game, komi) {
   if (game.phase === 'ended' && result) {
     if (result.reason === 'board-full') {
       result = computeOutcome(game.board, game.size, value);
+    } else if (result.reason === 'settle') {
+      result = {
+        ...judgeScores(result.scores, value),
+        reason: result.reason,
+      };
     } else {
       result = {
         ...judgeScores(result.scores, value),
@@ -557,13 +562,27 @@ export function resignGame(game) {
   };
 }
 
+export function settleGame(game) {
+  if (game.phase !== 'playing') return game;
+
+  const judged = judgeScores(groupCounts(game.board, game.size), game.komi);
+  return {
+    ...game,
+    phase: 'ended',
+    result: {
+      ...judged,
+      reason: 'settle',
+    },
+  };
+}
+
 export function remainingCells(game) {
   return game.board.reduce((total, cell) => total + (cell === EMPTY ? 1 : 0), 0);
 }
 
 export function resultLabel(result) {
   if (!result) return '';
-  if (result.reason === 'board-full') {
+  if (result.reason === 'board-full' || result.reason === 'settle') {
     if (result.rawTie) return '白胜因平局';
     if (result.handicapTie) return '白胜因贴目';
   }
@@ -576,6 +595,16 @@ export function resultDescription(result) {
   const komi = formatNumber(result.komi);
   if (result.reason === 'resign') {
     return `${colorName(result.loser)}认输，${colorName(result.winner)}直接获胜。`;
+  }
+
+  if (result.reason === 'settle') {
+    if (result.rawTie) {
+      return `按当前孤棋数结算：黑白原始间数同为 ${result.scores.black} 间；按先手贴 ${komi} 间规则，后手白方胜。`;
+    }
+    if (result.handicapTie) {
+      return `按当前孤棋数结算：先手贴 ${komi} 间后，双方同为 ${formatNumber(result.adjustedScores.black)} 间；依规后手白方获胜。`;
+    }
+    return `按当前孤棋数结算：黑方 ${result.scores.black} 间、白方 ${result.scores.white} 间；先手贴 ${komi} 间后，${colorName(result.winner)}胜出。`;
   }
 
   if (result.rawTie) {

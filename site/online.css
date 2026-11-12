@@ -669,12 +669,14 @@
 
 .online-primary-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 7px;
 }
 
 .online-primary-actions .btn {
   min-height: 38px;
+  padding-inline: 5px;
+  font-size: 9px;
 }
 
 .online-komi-request {

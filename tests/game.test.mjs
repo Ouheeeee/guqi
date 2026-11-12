@@ -18,6 +18,7 @@ import {
   mirrorIndex,
   placeStone,
   resignGame,
+  settleGame,
   resultDescription,
   resultLabel,
   setKomi,
@@ -218,6 +219,34 @@ test('棋盘填满后按贴目后的间数结算', () => {
   assert.equal(undone.phase, 'playing');
   assert.equal(undone.result, null);
   assert.equal(undone.history.length, totalMoves - 1);
+});
+
+test('立即结算按当前间数判定，贴目变化后重新裁定', () => {
+  const board = new Array(13 * 13).fill(EMPTY);
+  for (const index of [0, 2]) board[index] = BLACK;
+  for (const index of [6, 8, 10]) board[index] = WHITE;
+  const state = {
+    ...startGame(createGame(13, { komi: 0.5, rng: seededRandom(51) })),
+    board,
+    history: [],
+  };
+
+  const settled = settleGame(state);
+  assert.equal(settled.phase, 'ended');
+  assert.equal(settled.result.reason, 'settle');
+  assert.deepEqual(settled.result.scores, { black: 2, white: 3 });
+  assert.equal(settled.result.winner, BLACK, '黑方 2.5 间少于白方 3 间');
+  assert.equal(resultLabel(settled.result), '黑胜');
+  assert.match(resultDescription(settled.result), /按当前孤棋数结算/);
+
+  const recomputed = setKomi(settled, 1.5);
+  assert.equal(recomputed.result.reason, 'settle');
+  assert.equal(recomputed.result.komi, 1.5);
+  assert.equal(recomputed.result.winner, WHITE, '黑方 3.5 间多于白方 3 间');
+  assert.equal(recomputed.result.adjustedScores.black, 3.5);
+  assert.equal(settleGame(settled), settled, '终局后不能重复结算');
+  const ready = { ...state, phase: 'ready' };
+  assert.equal(settleGame(ready), ready);
 });
 
 test('三种先手贴目规则产生清晰的胜负与同数判定', () => {

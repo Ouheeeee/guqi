@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋联机对战：创建房间或输入房间码，与朋友在线下一盘孤棋。系统生成布局，双方同意后开始。">
   <title>孤棋 · 联机对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.3.0">
-  <link rel="stylesheet" href="./online.css?v=1.3.0">
+  <link rel="stylesheet" href="./styles.css?v=1.3.1">
+  <link rel="stylesheet" href="./online.css?v=1.3.1">
 </head>
 <body class="online-body">
   <a class="skip-link" href="#onlineMain">跳到联机大厅</a>
@@ -198,6 +198,7 @@
             </div>
             <div class="online-primary-actions">
               <button type="button" class="btn btn-soft" id="undoBtn">请求悔棋</button>
+              <button type="button" class="btn btn-soft" id="settleBtn" title="双方确认后按当前孤棋数结算">立即结算</button>
               <button type="button" class="btn btn-soft" id="resignBtn">认输</button>
             </div>
             <div class="online-komi-request">
@@ -208,7 +209,7 @@
                 <button type="button" data-komi-request="1.5">1.5 间</button>
               </div>
             </div>
-            <p class="online-panel-hint" id="actionHint">轮到你时点击棋盘空格落子。</p>
+            <p class="online-panel-hint" id="actionHint">轮到你时点击棋盘空格落子。悔棋和立即结算都需要对方确认。</p>
           </section>
 
           <section class="panel online-phase-panel online-result-panel" id="endPanel" hidden>
@@ -239,6 +240,6 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./online.js?v=1.3.0"></script>
+  <script type="module" src="./online.js?v=1.3.1"></script>
 </body>
 </html>

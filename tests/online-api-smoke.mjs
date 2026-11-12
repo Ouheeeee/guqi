@@ -105,4 +105,47 @@ assert.equal(resigned.state.result.reason, 'resign');
 const finalState = (await request(`/api/rooms/${code}`, { token: hostToken })).state;
 assert.equal(finalState.phase, 'ended');
 
+// 第二局：双方都同意后才允许立即结算；拒绝时继续对局。
+const settleCreated = await request('/api/rooms', {
+  method: 'POST',
+  body: { size: 13, komi: 0.5 },
+});
+const settleCode = settleCreated.code;
+const settleHost = settleCreated.token;
+const settleJoined = await request(`/api/rooms/${settleCode}/join`, { method: 'POST', body: {} });
+const settleGuest = settleJoined.token;
+await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleHost, body: { action: { type: 'vote', approve: true } },
+});
+const settleStarted = await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleGuest, body: { action: { type: 'vote', approve: true } },
+});
+assert.equal(settleStarted.state.phase, 'playing');
+assert.equal(settleStarted.state.canRequestSettle, true);
+
+const settleEmpty = settleStarted.state.board.findIndex((value) => value === 0);
+await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleHost, body: { action: { type: 'move', index: settleEmpty } },
+});
+const settleRequested = await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleHost, body: { action: { type: 'request-settle' } },
+});
+assert.equal(settleRequested.state.pending.kind, 'settle');
+const settleRejected = await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleGuest, body: { action: { type: 'respond-settle', accept: false } },
+});
+assert.equal(settleRejected.state.pending, null);
+assert.equal(settleRejected.state.phase, 'playing');
+
+await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleHost, body: { action: { type: 'request-settle' } },
+});
+const settleAccepted = await request(`/api/rooms/${settleCode}/actions`, {
+  method: 'POST', token: settleGuest, body: { action: { type: 'respond-settle', accept: true } },
+});
+assert.equal(settleAccepted.state.phase, 'ended');
+assert.equal(settleAccepted.state.result.reason, 'settle');
+assert.deepEqual(settleAccepted.state.result.scores, settleAccepted.state.counts);
+assert.equal(settleAccepted.state.canRequestSettle, false);
+
 console.log('ONLINE API SMOKE PASSED');

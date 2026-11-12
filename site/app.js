@@ -15,6 +15,7 @@ import {
   placeStone,
   remainingCells,
   resignGame,
+  settleGame,
   resultDescription,
   resultLabel,
   rowOf,
@@ -22,7 +23,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.3.0';
+} from './game.js?v=1.3.1';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -64,6 +65,7 @@ const dom = {
   regenerateBtn: document.querySelector('#regenerateBtn'),
   undoBtn: document.querySelector('#undoBtn'),
   resignBtn: document.querySelector('#resignBtn'),
+  settleBtn: document.querySelector('#settleBtn'),
   sizeButtons: Array.from(document.querySelectorAll('[data-size]')),
   komiButtons: Array.from(document.querySelectorAll('[data-komi]')),
   toast: document.querySelector('#toast'),
@@ -348,6 +350,7 @@ function renderControls() {
   dom.mobileStartWrap.hidden = !isReady;
   dom.undoBtn.disabled = game.history.length === 0;
   dom.resignBtn.disabled = !isPlaying;
+  dom.settleBtn.disabled = !isPlaying;
   dom.newGameBtn.disabled = atLimit;
   dom.newGameBtn.title = atLimit
     ? `最多同时保留 ${MAX_MATCHES} 场对局`
@@ -538,11 +541,13 @@ function renderResultContent() {
   const title = resultLabel(result);
   const reason = result.reason === 'resign'
     ? '认输'
-    : result.rawTie
-      ? '平局裁定'
-      : result.handicapTie
-        ? '贴目同数'
-        : '棋枰已满';
+    : result.reason === 'settle'
+      ? '立即结算'
+      : result.rawTie
+        ? '平局裁定'
+        : result.handicapTie
+          ? '贴目同数'
+          : '棋枰已满';
   dom.resultKicker.textContent = `对局 ${activeNumber()} · 终局 · ${reason}`;
   dom.resultStone.className = `result-stone ${result.winner === BLACK ? 'is-black' : 'is-white'}`;
   dom.resultTitle.textContent = title;
@@ -669,6 +674,13 @@ function handleUndo() {
 function handleResign() {
   if (game.phase !== 'playing') return;
   commitActive(resignGame(game));
+  renderAll({ animateCounts: true });
+  openResult();
+}
+
+function handleSettle() {
+  if (game.phase !== 'playing') return;
+  commitActive(settleGame(game));
   renderAll({ animateCounts: true });
   openResult();
 }
@@ -888,6 +900,7 @@ dom.newGameBtn.addEventListener('click', handleNewGame);
 dom.regenerateBtn.addEventListener('click', handleRegenerate);
 dom.undoBtn.addEventListener('click', handleUndo);
 dom.resignBtn.addEventListener('click', handleResign);
+dom.settleBtn.addEventListener('click', handleSettle);
 
 for (const button of dom.sizeButtons) {
   button.addEventListener('click', () => handleSizeChange(Number(button.dataset.size)));
