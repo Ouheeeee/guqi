@@ -1,6 +1,6 @@
 {
   "name": "guqi",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "private": true,
   "type": "module",
   "description": "孤棋 · 同屏、联机与账户棋谱的极简连线围棋变体",

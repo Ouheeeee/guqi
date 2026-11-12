@@ -141,7 +141,7 @@
 .online-segmented button.is-selected {
   background: var(--card-strong);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(23, 22, 20, 0.12);
+  box-shadow: none;
 }
 
 .online-komi-seg button {

@@ -8,12 +8,12 @@ import {
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.5.2';
+} from './game.js?v=1.5.3';
 import {
   accountUrl,
   initAccountLink,
   saveOnlineRecord,
-} from './auth-client.js?v=1.5.2';
+} from './auth-client.js?v=1.5.3';
 
 const API_BASE = 'https://guqi-online-api.pages.dev';
 const TOKEN_PREFIX = 'guqi.online.token.';
