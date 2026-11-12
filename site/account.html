@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#efede6">
+  <meta name="description" content="孤棋账户：登录后保存对局、继续本地棋局、查看联机棋谱。离线对局无需登录。">
+  <title>账户 · 孤棋</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=1.4.0">
+  <link rel="stylesheet" href="./account.css?v=1.4.0">
+</head>
+<body class="account-body">
+  <a class="skip-link" href="#accountMain">跳到账户内容</a>
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="回到孤棋首页">
+      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+        <rect x="1" y="1" width="42" height="42" rx="13" fill="#171614"/>
+        <circle cx="15.5" cy="15.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="28.5" cy="28.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="15.5" cy="28.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="28.5" cy="15.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="22" cy="22" r="1.3" fill="#f8f6ef" opacity=".55"/>
+      </svg>
+      <div class="brand-copy">
+        <span class="brand-cn">孤棋</span>
+        <span class="brand-en">GU QI · SOLITUDE</span>
+      </div>
+    </a>
+    <div class="topbar-right">
+      <a class="topbar-link" href="./index.html">同屏对战 <span aria-hidden="true">↗</span></a>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <a class="topbar-link" href="./online.html">联机对战 <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <main class="account-main" id="accountMain">
+    <section class="account-loading" id="loadingView">
+      <span class="loading-ring" aria-hidden="true"></span>
+      <p>正在读取账户…</p>
+    </section>
+
+    <section class="account-auth" id="authView" hidden>
+      <div class="account-hero">
+        <p class="eyebrow"><span>ACCOUNT</span><span class="eyebrow-rule" aria-hidden="true"></span><span>YOUR GAMES, KEPT</span></p>
+        <h1>留下棋谱，<br>随时续局。</h1>
+        <p class="account-hero-sub">不登录也可以同屏或联机对局。登录后，你可以把对局保存到云端，换一台设备继续，也能回看联机棋谱。</p>
+      </div>
+
+      <div class="account-auth-grid">
+        <section class="account-panel auth-panel" aria-labelledby="authTitle">
+          <div class="auth-tabs" role="tablist" aria-label="登录或注册">
+            <button type="button" class="auth-tab is-active" id="loginTab" role="tab" aria-selected="true" aria-controls="authForm">登录</button>
+            <button type="button" class="auth-tab" id="registerTab" role="tab" aria-selected="false" aria-controls="authForm">注册</button>
+          </div>
+          <h2 id="authTitle">欢迎回来</h2>
+          <p class="auth-lead" id="authLead">登录后继续你的存档与棋谱。</p>
+          <form id="authForm" novalidate>
+            <label class="auth-field" for="authEmail">
+              <span>邮箱</span>
+              <input id="authEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required />
+            </label>
+            <label class="auth-field" for="authDisplayName" id="displayNameField" hidden>
+              <span>昵称</span>
+              <input id="authDisplayName" name="displayName" type="text" autocomplete="nickname" maxlength="24" placeholder="例如：山中来客" />
+            </label>
+            <label class="auth-field" for="authPassword">
+              <span>密码</span>
+              <input id="authPassword" name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="至少 8 个字符" required />
+            </label>
+            <p class="auth-hint" id="authPasswordHint">登录已有账户。</p>
+            <p class="auth-error" id="authError" role="alert"></p>
+            <button type="submit" class="btn btn-primary auth-submit" id="authSubmit">登录</button>
+          </form>
+          <p class="auth-note">当前使用邮箱 + 密码登录，不发送验证邮件；忘记密码暂不支持自助找回。</p>
+        </section>
+
+        <aside class="account-panel account-aside">
+          <p class="panel-kicker">WHY ACCOUNT</p>
+          <h2>把对局留下来</h2>
+          <ul class="account-benefits">
+            <li><span>01</span><div><strong>云端存档</strong><p>保存同屏棋局，之后从账户里继续。</p></div></li>
+            <li><span>02</span><div><strong>联机棋谱</strong><p>登录后结束的联机对局会自动记录。</p></div></li>
+            <li><span>03</span><div><strong>离线照常</strong><p>不登录仍然可以即时开局，一切不变。</p></div></li>
+          </ul>
+          <p class="account-disclaimer">微信 / QQ 登录需要开发者应用资质与密钥，暂未接入。当前版本使用邮箱账户。</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="account-dashboard" id="dashboardView" hidden>
+      <header class="account-dashboard-head">
+        <div class="account-profile">
+          <span class="account-avatar" id="profileInitial" aria-hidden="true">孤</span>
+          <div>
+            <p class="eyebrow"><span>MY ACCOUNT</span><span class="eyebrow-rule" aria-hidden="true"></span><span id="profileJoined">—</span></p>
+            <h1 id="profileName">棋手</h1>
+            <p id="profileEmail" class="account-email"></p>
+          </div>
+        </div>
+        <div class="account-head-actions">
+          <a class="btn btn-soft" href="./index.html">同屏对战</a>
+          <a class="btn btn-soft" href="./online.html">联机对战</a>
+          <button type="button" class="text-button" id="logoutBtn">退出登录</button>
+        </div>
+      </header>
+
+      <div class="account-stats" aria-label="账户概览">
+        <div><span>云端存档</span><strong id="localCount">0</strong><em>份</em></div>
+        <div><span>联机棋谱</span><strong id="onlineCount">0</strong><em>局</em></div>
+        <div class="account-stats-note"><span>登录状态</span><strong>已连接</strong><em>云端</em></div>
+      </div>
+
+      <section class="account-section" aria-labelledby="localHeading">
+        <div class="account-section-head">
+          <div>
+            <p class="eyebrow"><span>SAVED GAMES</span><span class="eyebrow-rule" aria-hidden="true"></span><span>同屏模式</span></p>
+            <h2 id="localHeading">云端存档</h2>
+          </div>
+          <button type="button" class="text-button" id="refreshLibrary">刷新</button>
+        </div>
+        <div class="account-list" id="localList"></div>
+        <div class="account-empty" id="localEmpty" hidden>
+          <p>还没有云端存档。</p>
+          <a href="./index.html">去下一局</a>
+        </div>
+      </section>
+
+      <section class="account-section" aria-labelledby="onlineHeading">
+        <div class="account-section-head">
+          <div>
+            <p class="eyebrow"><span>ONLINE RECORDS</span><span class="eyebrow-rule" aria-hidden="true"></span><span>已结束对局</span></p>
+            <h2 id="onlineHeading">联机棋谱</h2>
+          </div>
+        </div>
+        <div class="account-list" id="onlineList"></div>
+        <div class="account-empty" id="onlineEmpty" hidden>
+          <p>还没有联机棋谱。登录后完成一局联机对局，会自动保存在这里。</p>
+          <a href="./online.html">去联机</a>
+        </div>
+      </section>
+
+      <p class="account-footer-note">存档只对当前账户可见。联机进行中的房间仍由浏览器中的房间身份恢复。</p>
+    </section>
+  </main>
+
+  <div class="account-modal" id="recordModal" hidden>
+    <div class="account-modal-backdrop" data-record-close></div>
+    <section class="account-modal-card" role="dialog" aria-modal="true" aria-labelledby="recordTitle" tabindex="-1">
+      <button type="button" class="account-modal-close" id="recordClose" aria-label="关闭棋谱">×</button>
+      <p class="eyebrow"><span>GAME RECORD</span><span class="eyebrow-rule" aria-hidden="true"></span><span id="recordKind">棋谱</span></p>
+      <h2 id="recordTitle">对局棋谱</h2>
+      <p class="record-summary" id="recordSummary"></p>
+      <div class="record-scores" id="recordScores"></div>
+      <ol class="record-moves" id="recordMoves"></ol>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <span>孤棋 · 账户与棋谱</span>
+    <span>离线对局无需登录</span>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./account.js?v=1.4.0"></script>
+</body>
+</html>

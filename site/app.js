@@ -23,7 +23,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.3.1';
+} from './game.js?v=1.4.0';
+import {
+  accountUrl,
+  getSavedGame,
+  initAccountLink,
+  saveLocalGame,
+} from './auth-client.js?v=1.4.0';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -66,6 +72,9 @@ const dom = {
   undoBtn: document.querySelector('#undoBtn'),
   resignBtn: document.querySelector('#resignBtn'),
   settleBtn: document.querySelector('#settleBtn'),
+  accountLink: document.querySelector('#accountLink'),
+  saveBtn: document.querySelector('#saveBtn'),
+  saveBtnHint: document.querySelector('#saveBtnHint'),
   sizeButtons: Array.from(document.querySelectorAll('[data-size]')),
   komiButtons: Array.from(document.querySelectorAll('[data-komi]')),
   toast: document.querySelector('#toast'),
@@ -95,6 +104,8 @@ let modalPreviousFocus = null;
 let freshTimer = null;
 let pendingCloseMatchId = null;
 let pendingCloseTimer = null;
+let accountUser = null;
+let savingCloud = false;
 
 const phaseNames = {
   ready: '布局阶段',
@@ -138,6 +149,7 @@ function makeSession({
   return {
     ...(start ? startGame(state) : state),
     id: id ?? `match-${++matchSerial}`,
+    cloudId: null,
   };
 }
 
@@ -351,6 +363,9 @@ function renderControls() {
   dom.undoBtn.disabled = game.history.length === 0;
   dom.resignBtn.disabled = !isPlaying;
   dom.settleBtn.disabled = !isPlaying;
+  dom.saveBtn.hidden = !accountUser;
+  dom.saveBtn.disabled = savingCloud;
+  if (dom.saveBtnHint) dom.saveBtnHint.textContent = game.cloudId ? '更新存档' : '云端存档';
   dom.newGameBtn.disabled = atLimit;
   dom.newGameBtn.title = atLimit
     ? `最多同时保留 ${MAX_MATCHES} 场对局`
@@ -685,6 +700,100 @@ function handleSettle() {
   openResult();
 }
 
+async function handleSaveCloud() {
+  if (!accountUser) {
+    location.assign(accountUrl(location.pathname + location.search));
+    return;
+  }
+  if (savingCloud) return;
+  savingCloud = true;
+  renderControls();
+  const phase = game.phase === 'ended'
+    ? (game.result ? resultLabel(game.result) : '已结束')
+    : game.phase === 'ready' ? '待开始' : `进行中 · ${game.history.length} 手`;
+  const title = `第 ${activeNumber()} 场 · ${game.size} 路 · ${phase}`;
+  try {
+    const saved = await saveLocalGame(game, { id: game.cloudId || '', title });
+    game.cloudId = saved.id;
+    showToast('已保存到云端');
+  } catch (error) {
+    if (error.status === 401) {
+      accountUser = null;
+      dom.accountLink.textContent = '登录';
+      showToast('登录已过期，请重新登录');
+    } else {
+      showToast(error.message || '保存失败');
+    }
+  } finally {
+    savingCloud = false;
+    renderControls();
+  }
+}
+
+function normalizeSavedState(state) {
+  if (!state || !BOARD_SIZES.includes(Number(state.size))) throw new Error('存档格式不受支持');
+  const size = Number(state.size);
+  if (!Array.isArray(state.board) || state.board.length !== size * size) throw new Error('存档棋盘不完整');
+  if (!KOMI_OPTIONS.includes(Number(state.komi))) throw new Error('存档贴目无效');
+  return {
+    size,
+    komi: Number(state.komi),
+    board: state.board.map(Number),
+    phase: ['ready', 'playing', 'ended'].includes(state.phase) ? state.phase : 'ready',
+    turn: state.turn === WHITE ? WHITE : BLACK,
+    history: Array.isArray(state.history) ? state.history : [],
+    lastMove: Number.isInteger(state.lastMove) ? state.lastMove : null,
+    result: state.result && typeof state.result === 'object' ? state.result : null,
+    startedAt: Number.isFinite(state.startedAt) ? state.startedAt : null,
+    layoutId: typeof state.layoutId === 'string' ? state.layoutId : null,
+  };
+}
+
+async function restoreCloudSave() {
+  const resumeId = new URLSearchParams(location.search).get('resume');
+  if (!resumeId) return;
+  if (!accountUser) {
+    const target = `index.html?resume=${encodeURIComponent(resumeId)}`;
+    location.assign(accountUrl(target));
+    return;
+  }
+  try {
+    const saved = await getSavedGame(resumeId);
+    const loaded = normalizeSavedState(saved.state);
+    const initial = matches[0];
+    if (!initial) return;
+    const hydrated = { ...loaded, id: initial.id, cloudId: saved.id };
+    matches[0] = hydrated;
+    activeMatchId = hydrated.id;
+    game = hydrated;
+    previousCounts = null;
+    buildBoard();
+    renderAll();
+    if (game.phase === 'ended') scheduleResult();
+    const url = new URL(location.href);
+    url.searchParams.delete('resume');
+    history.replaceState(null, '', `${url.pathname}${url.search}`);
+    showToast('已载入云端存档');
+  } catch (error) {
+    if (error.status === 401) {
+      accountUser = null;
+      const target = `index.html?resume=${encodeURIComponent(resumeId)}`;
+      location.assign(accountUrl(target));
+      return;
+    }
+    showToast(error.message || '存档读取失败');
+  }
+}
+
+async function initCloud() {
+  const user = await initAccountLink(dom.accountLink, `${location.pathname}${location.search}`);
+  accountUser = user;
+  dom.accountLink.textContent = user ? '我的' : '登录';
+  dom.accountLink.href = accountUrl(location.pathname + location.search);
+  renderControls();
+  await restoreCloudSave();
+}
+
 function handleCell(index) {
   if (game.phase !== 'playing') return;
   if (!Number.isInteger(index) || game.board[index] !== EMPTY) return;
@@ -901,6 +1010,7 @@ dom.regenerateBtn.addEventListener('click', handleRegenerate);
 dom.undoBtn.addEventListener('click', handleUndo);
 dom.resignBtn.addEventListener('click', handleResign);
 dom.settleBtn.addEventListener('click', handleSettle);
+dom.saveBtn.addEventListener('click', handleSaveCloud);
 
 for (const button of dom.sizeButtons) {
   button.addEventListener('click', () => handleSizeChange(Number(button.dataset.size)));
@@ -930,6 +1040,7 @@ game = initialMatch;
 
 buildBoard();
 renderAll();
+initCloud();
 
 // 便于自动化验收：只读快照，不暴露任何可修改入口。
 Object.defineProperty(window, '__guqi', {
@@ -941,6 +1052,7 @@ Object.defineProperty(window, '__guqi', {
         matchCount: matches.length,
         matchLimit: MAX_MATCHES,
         activeIndex: activeIndex(),
+        cloudId: game.cloudId ?? null,
         size: game.size,
         komi: game.komi,
         phase: game.phase,

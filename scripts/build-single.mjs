@@ -10,11 +10,15 @@ let html = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(site, 'styles.css'), 'utf8');
 const game = fs.readFileSync(path.join(site, 'game.js'), 'utf8');
 const app = fs.readFileSync(path.join(site, 'app.js'), 'utf8');
+const authClient = fs.readFileSync(path.join(site, 'auth-client.js'), 'utf8');
 const favicon = fs.readFileSync(path.join(site, 'favicon.svg'), 'utf8');
 
 const faviconData = `data:image/svg+xml;base64,${Buffer.from(favicon).toString('base64')}`;
 const gameInline = game.replace(/^export\s+/gm, '');
-const appInline = app.replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/game\.js(?:\?[^'"]*)?['"];\s*/m, '');
+const authClientInline = authClient.replace(/^export\s+/gm, '');
+const appInline = app
+  .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/game\.js(?:\?[^'"]*)?['"];\s*/m, '')
+  .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"]\.\/auth-client\.js(?:\?[^'"]*)?['"];\s*/m, '');
 
 if (!html.includes('./styles.css') || !html.includes('./app.js') || !html.includes('./favicon.svg')) {
   throw new Error('Expected asset references were not found in index.html');
@@ -25,7 +29,7 @@ html = html
   .replace(/<link rel="stylesheet" href="\.\/styles\.css(?:\?[^"]*)?">/, `<style>\n${css}\n</style>`)
   .replace(
     /<script type="module" src="\.\/app\.js(?:\?[^"]*)?"><\/script>/,
-    `<script type="module">\n${gameInline}\n\n${appInline}\n</script>`,
+    `<script type="module">\n${gameInline}\n\n${authClientInline}\n\n${appInline}\n</script>`,
   );
 
 fs.mkdirSync(outDir, { recursive: true });

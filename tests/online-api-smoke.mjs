@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 const API = 'https://guqi-online-api.pages.dev';
 const ORIGIN = 'https://ouheeeee.github.io';
 
-async function request(path, { method = 'GET', token, body } = {}) {
-  const headers = { Origin: ORIGIN, 'Content-Type': 'application/json' };
+async function request(path, { method = 'GET', token, body, headers: extraHeaders = {} } = {}) {
+  const headers = { Origin: ORIGIN, 'Content-Type': 'application/json', ...extraHeaders };
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API}${path}`, {
     method,
@@ -147,5 +147,33 @@ assert.equal(settleAccepted.state.phase, 'ended');
 assert.equal(settleAccepted.state.result.reason, 'settle');
 assert.deepEqual(settleAccepted.state.result.scores, settleAccepted.state.counts);
 assert.equal(settleAccepted.state.canRequestSettle, false);
+
+// 登录账户后，把已结束的联机对局保存为棋谱。
+const email = `guqi-online-test-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
+const account = await request('/api/auth/register', {
+  method: 'POST',
+  body: { email, password: 'test-password-8', displayName: '联机测试' },
+});
+const accountToken = account.token;
+const recordResponse = await fetch(`${API}/api/games/online`, {
+  method: 'POST',
+  headers: {
+    Origin: ORIGIN,
+    'Content-Type': 'application/json',
+    'X-Account-Token': accountToken,
+    'X-Room-Token': hostToken,
+  },
+  body: JSON.stringify({ code }),
+});
+const record = await recordResponse.json();
+assert.ok(recordResponse.ok, JSON.stringify(record));
+assert.equal(record.game.kind, 'online');
+assert.equal(record.game.reason, 'resign');
+const recordsResponse = await fetch(`${API}/api/games`, {
+  headers: { Origin: ORIGIN, 'X-Account-Token': accountToken },
+});
+const records = await recordsResponse.json();
+assert.ok(recordsResponse.ok, JSON.stringify(records));
+assert.ok(records.games.some((game) => game.id === record.game.id));
 
 console.log('ONLINE API SMOKE PASSED');

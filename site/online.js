@@ -6,7 +6,12 @@ import {
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.3.1';
+} from './game.js?v=1.4.0';
+import {
+  accountUrl,
+  initAccountLink,
+  saveOnlineRecord,
+} from './auth-client.js?v=1.4.0';
 
 const API_BASE = 'https://guqi-online-api.pages.dev';
 const TOKEN_PREFIX = 'guqi.online.token.';
@@ -35,6 +40,7 @@ const dom = {
   roomSub: $('#roomSub'),
   onlinePhaseKicker: $('#onlinePhaseKicker'),
   copyLinkBtn: $('#copyLinkBtn'),
+  accountLink: $('#accountLink'),
   backBtn: $('#backBtn'),
   leaveBtn: $('#leaveBtn'),
   onlineRule: $('#onlineRule'),
@@ -80,6 +86,10 @@ const dom = {
   resultBlackCount: $('#resultBlackCount'),
   resultWhiteCount: $('#resultWhiteCount'),
   onlineResultKomi: $('#onlineResultKomi'),
+  recordBox: $('#recordBox'),
+  recordStatus: $('#recordStatus'),
+  saveRecordBtn: $('#saveRecordBtn'),
+  recordLogin: $('#recordLogin'),
   resultBackBtn: $('#resultBackBtn'),
   toast: $('#toast'),
 };
@@ -97,6 +107,9 @@ let toastTimer = null;
 let boardSize = 0;
 let lastPhase = null;
 let lastPendingKey = null;
+let accountUser = null;
+let recordRoom = null;
+let recordState = 'idle';
 
 class ApiError extends Error {
   constructor(status, message) {
@@ -258,6 +271,8 @@ function showLobby({ message = '', keepCode = false } = {}) {
 function enterRoom(code, token, state) {
   roomCode = code.toUpperCase();
   sessionToken = token;
+  recordRoom = null;
+  recordState = 'idle';
   saveToken(roomCode, token);
   setLobbyVisible(false);
   room = null;
@@ -523,6 +538,66 @@ function renderPending() {
   lastPendingKey = key;
 }
 
+function updateRecordUI() {
+  const ended = room?.phase === 'ended';
+  dom.recordBox.hidden = !ended;
+  if (!ended) return;
+  dom.recordLogin.href = accountUrl(`online.html?room=${room.code}`);
+  if (!accountUser) {
+    dom.recordLogin.hidden = false;
+    dom.saveRecordBtn.hidden = true;
+    dom.recordStatus.textContent = '登录后可以把本局保存为棋谱。';
+    return;
+  }
+  dom.recordLogin.hidden = true;
+  if (recordState === 'saving') {
+    dom.recordStatus.textContent = '正在把棋谱保存到账户…';
+    dom.saveRecordBtn.hidden = true;
+  } else if (recordState === 'saved') {
+    dom.recordStatus.textContent = '棋谱已保存到账户。';
+    dom.saveRecordBtn.hidden = true;
+  } else if (recordState === 'failed') {
+    dom.recordStatus.textContent = '棋谱保存失败，可以重试。';
+    dom.saveRecordBtn.hidden = false;
+    dom.saveRecordBtn.textContent = '重试保存';
+  } else {
+    dom.recordStatus.textContent = '准备保存棋谱…';
+    dom.saveRecordBtn.hidden = true;
+  }
+}
+
+async function maybeSaveOnlineRecord() {
+  if (!accountUser || !room || room.phase !== 'ended' || !sessionToken) {
+    updateRecordUI();
+    return;
+  }
+  if (recordRoom === room.code) {
+    updateRecordUI();
+    return;
+  }
+  recordRoom = room.code;
+  recordState = 'saving';
+  updateRecordUI();
+  try {
+    await saveOnlineRecord(room.code, sessionToken);
+    recordState = 'saved';
+  } catch (error) {
+    recordState = 'failed';
+    if (error.status === 401) {
+      accountUser = null;
+      dom.accountLink.textContent = '登录';
+    }
+  }
+  updateRecordUI();
+}
+
+async function initAccount() {
+  const user = await initAccountLink(dom.accountLink);
+  accountUser = user;
+  if (user) dom.accountLink.textContent = '我的';
+  await maybeSaveOnlineRecord();
+}
+
 function renderRoom() {
   if (!room) return;
   dom.roomCodeLabel.textContent = room.code;
@@ -580,6 +655,9 @@ function renderRoom() {
   document.title = room.phase === 'waiting'
     ? `等待对手 · 孤棋联机`
     : `${phaseTitles[room.phase]} · 孤棋联机`;
+
+  updateRecordUI();
+  if (room.phase === 'ended') void maybeSaveOnlineRecord();
 }
 
 function applyState(state, { notify = true } = {}) {
@@ -819,4 +897,5 @@ async function restoreFromUrl() {
 bindEvents();
 setCreateChoice('size', 13);
 setCreateChoice('komi', 0.5);
+initAccount();
 restoreFromUrl();

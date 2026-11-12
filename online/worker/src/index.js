@@ -19,6 +19,11 @@ const ONLINE_MS = 12000;
 const TOUCH_MS = 4000;
 const ROOM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PASSWORD_ITERATIONS = 100000;
+const MAX_STATE_LENGTH = 60000;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DUMMY_SALT = 'AAAAAAAAAAAAAAAAAAAAAA==';
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -47,7 +52,7 @@ function corsHeaders(origin, env) {
   if (origin && allowedOrigins(env).has(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS';
-    headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type';
+    headers['Access-Control-Allow-Headers'] = 'Authorization,Content-Type,X-Account-Token,X-Room-Token';
     headers['Access-Control-Max-Age'] = '86400';
   }
   return headers;
@@ -97,6 +102,339 @@ function randomToken() {
 function bearerToken(request) {
   const header = request.headers.get('Authorization') || '';
   return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function safeEqual(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string' || left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+function normalizeEmail(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function cleanText(value, maxLength) {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/\s+/g, ' ').slice(0, maxLength);
+}
+
+function accountToken(request) {
+  return (request.headers.get('X-Account-Token') || '').trim();
+}
+
+function publicUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    createdAt: row.created_at,
+  };
+}
+
+async function passwordDigest(env, email, password, salt, iterations) {
+  if (!env.AUTH_PEPPER || env.AUTH_PEPPER.length < 32) {
+    throw new HttpError(503, '登录服务尚未配置，请稍后再试');
+  }
+  const rounds = Number(iterations) || PASSWORD_ITERATIONS;
+  if (!Number.isInteger(rounds) || rounds < 1 || rounds > PASSWORD_ITERATIONS) {
+    throw new HttpError(500, '账户密码参数异常');
+  }
+  const encoder = new TextEncoder();
+  const pepperKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(env.AUTH_PEPPER),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const peppered = await crypto.subtle.sign('HMAC', pepperKey, encoder.encode(`${email}\n${password}`));
+  const material = await crypto.subtle.importKey('raw', peppered, 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: base64ToBytes(salt), iterations: rounds, hash: 'SHA-256' },
+    material,
+    256,
+  );
+  return bytesToBase64(new Uint8Array(bits));
+}
+
+function randomSalt() {
+  return bytesToBase64(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+async function createAccountSession(env, userId) {
+  const token = randomToken();
+  const tokenHash = await hashToken(token);
+  const now = Date.now();
+  await env.DB.prepare(
+    'INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
+  ).bind(tokenHash, userId, now, now + SESSION_TTL_MS).run();
+  return token;
+}
+
+async function accountFromRequest(request, env, { required = true } = {}) {
+  const token = accountToken(request);
+  if (!token) {
+    if (required) throw new HttpError(401, '请先登录');
+    return null;
+  }
+  const tokenHash = await hashToken(token);
+  const row = await env.DB.prepare(
+    `SELECT u.id, u.email, u.display_name, u.created_at, s.expires_at
+     FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = ?`,
+  ).bind(tokenHash).first();
+  if (!row || Number(row.expires_at) <= Date.now()) {
+    if (row) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
+    if (required) throw new HttpError(401, '登录状态已过期，请重新登录');
+    return null;
+  }
+  return publicUser(row);
+}
+
+async function requireAccount(request, env) {
+  return accountFromRequest(request, env);
+}
+
+function gameMetadata(row) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    size: row.size,
+    komi: row.komi,
+    phase: row.phase,
+    moves: row.moves,
+    winner: row.winner,
+    reason: row.reason,
+    roomCode: row.room_code,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function savedGameState(raw) {
+  if (!raw || typeof raw !== 'object') throw new HttpError(400, '棋局数据格式错误');
+  const size = Number(raw.size);
+  if (!BOARD_SIZES.includes(size)) throw new HttpError(400, '不支持的棋盘尺寸');
+  if (!Array.isArray(raw.board) || raw.board.length !== size * size) {
+    throw new HttpError(400, '棋盘数据不完整');
+  }
+  const board = raw.board.map(Number);
+  if (board.some((cell) => cell !== 0 && cell !== 1 && cell !== 2)) {
+    throw new HttpError(400, '棋盘棋子数据无效');
+  }
+  const komi = Number(raw.komi);
+  if (!KOMI_OPTIONS.includes(komi)) throw new HttpError(400, '不支持的贴目规则');
+  const phase = ['ready', 'playing', 'ended'].includes(raw.phase) ? raw.phase : 'ready';
+  const turn = raw.turn === WHITE ? WHITE : BLACK;
+  if (!Array.isArray(raw.history) || raw.history.length > size * size) {
+    throw new HttpError(400, '棋谱数据无效');
+  }
+  const history = raw.history.map((move, index) => {
+    if (!move || !Number.isInteger(move.index) || move.index < 0 || move.index >= size * size) {
+      throw new HttpError(400, '棋谱落子位置无效');
+    }
+    if (move.color !== BLACK && move.color !== WHITE) throw new HttpError(400, '棋谱颜色无效');
+    return {
+      index: move.index,
+      color: move.color,
+      moveNumber: Number.isInteger(move.moveNumber) ? move.moveNumber : index + 1,
+    };
+  });
+  const lastMove = Number.isInteger(raw.lastMove) && raw.lastMove >= 0 && raw.lastMove < size * size
+    ? raw.lastMove
+    : null;
+  const result = raw.result && typeof raw.result === 'object' ? raw.result : null;
+  const state = {
+    size,
+    komi,
+    board,
+    phase,
+    turn,
+    history,
+    lastMove,
+    result,
+    startedAt: Number.isFinite(raw.startedAt) ? raw.startedAt : null,
+    layoutId: typeof raw.layoutId === 'string' ? raw.layoutId.slice(0, 80) : null,
+  };
+  if (JSON.stringify(state).length > MAX_STATE_LENGTH) throw new HttpError(413, '棋局数据过大');
+  return state;
+}
+
+function savedGameTitle(value, state) {
+  const cleaned = cleanText(value, 80);
+  if (cleaned) return cleaned;
+  const phase = state.phase === 'ready' ? '待开始' : state.phase === 'ended' ? '已结束' : '进行中';
+  return `${state.size} 路 · ${phase} · ${state.history.length} 手`;
+}
+
+async function registerUser(request, env, origin) {
+  const body = await readJson(request);
+  const email = normalizeEmail(body.email);
+  const displayName = cleanText(body.displayName, 24);
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!EMAIL_PATTERN.test(email) || email.length > 254) throw new HttpError(400, '请输入有效的邮箱地址');
+  if (displayName.length < 1) throw new HttpError(400, '请输入昵称');
+  if (password.length < 8) throw new HttpError(400, '密码至少需要 8 个字符');
+  if (password.length > 128) throw new HttpError(400, '密码太长了');
+  const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+  if (existing) throw new HttpError(409, '这个邮箱已经注册过');
+
+  const salt = randomSalt();
+  const hash = await passwordDigest(env, email, password, salt, PASSWORD_ITERATIONS);
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, display_name, password_hash, password_salt, password_iterations, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(id, email, displayName, hash, salt, PASSWORD_ITERATIONS, now).run();
+  } catch (error) {
+    if (String(error?.message || '').toLowerCase().includes('unique')) {
+      throw new HttpError(409, '这个邮箱已经注册过');
+    }
+    throw error;
+  }
+  const token = await createAccountSession(env, id);
+  return response({ user: { id, email, displayName, createdAt: now }, token }, 201, origin, env);
+}
+
+async function loginUser(request, env, origin) {
+  const body = await readJson(request);
+  const email = normalizeEmail(body.email);
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!EMAIL_PATTERN.test(email) || !password) throw new HttpError(401, '邮箱或密码不正确');
+  const row = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
+  if (!row) {
+    await passwordDigest(env, email, password, DUMMY_SALT, PASSWORD_ITERATIONS);
+    throw new HttpError(401, '邮箱或密码不正确');
+  }
+  const hash = await passwordDigest(
+    env, email, password, row.password_salt, Number(row.password_iterations),
+  );
+  if (!safeEqual(hash, row.password_hash)) throw new HttpError(401, '邮箱或密码不正确');
+  const token = await createAccountSession(env, row.id);
+  return response({ user: publicUser(row), token }, 200, origin, env);
+}
+
+async function logoutUser(request, env, origin) {
+  const token = accountToken(request);
+  if (token) {
+    const tokenHash = await hashToken(token);
+    await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
+  }
+  return response({ ok: true }, 200, origin, env);
+}
+
+async function getMe(request, env, origin) {
+  const user = await requireAccount(request, env);
+  return response({ user }, 200, origin, env);
+}
+
+async function listGames(request, env, origin, user) {
+  const rows = await env.DB.prepare(
+    `SELECT id, kind, title, size, komi, phase, moves, winner, reason, room_code, created_at, updated_at
+     FROM games WHERE user_id = ? ORDER BY updated_at DESC LIMIT 100`,
+  ).bind(user.id).all();
+  return response({ games: (rows.results || []).map(gameMetadata) }, 200, origin, env);
+}
+
+async function saveLocalGame(request, env, origin, user) {
+  const body = await readJson(request);
+  const state = savedGameState(body.state);
+  const title = savedGameTitle(body.title, state);
+  const stateJson = JSON.stringify(state);
+  const now = Date.now();
+  const winner = state.result && Number.isInteger(state.result.winner) ? state.result.winner : null;
+  const reason = state.result && typeof state.result.reason === 'string' ? state.result.reason.slice(0, 40) : null;
+  const requestedId = typeof body.id === 'string' ? body.id.trim() : '';
+  let id = requestedId;
+
+  if (id) {
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) throw new HttpError(400, '存档标识无效');
+    const result = await env.DB.prepare(
+      `UPDATE games SET title = ?, size = ?, komi = ?, phase = ?, moves = ?, winner = ?, reason = ?,
+       state = ?, updated_at = ? WHERE id = ? AND user_id = ? AND kind = 'local'`,
+    ).bind(title, state.size, state.komi, state.phase, state.history.length, winner, reason, stateJson, now, id, user.id).run();
+    if (!result.meta.changes) throw new HttpError(404, '存档不存在或已删除');
+  } else {
+    id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO games (id, user_id, kind, title, size, komi, phase, moves, winner, reason, room_code, state, created_at, updated_at)
+       VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+    ).bind(id, user.id, title, state.size, state.komi, state.phase, state.history.length, winner, reason, stateJson, now, now).run();
+  }
+  const row = await env.DB.prepare('SELECT * FROM games WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+  return response({ game: gameMetadata(row) }, requestedId ? 200 : 201, origin, env);
+}
+
+async function getSavedGame(request, env, origin, user, id) {
+  const row = await env.DB.prepare('SELECT * FROM games WHERE id = ? AND user_id = ?').bind(id, user.id).first();
+  if (!row) throw new HttpError(404, '棋谱不存在或已删除');
+  let state;
+  try { state = JSON.parse(row.state); } catch { throw new HttpError(500, '棋谱数据损坏'); }
+  return response({ game: { ...gameMetadata(row), state } }, 200, origin, env);
+}
+
+async function deleteSavedGame(request, env, origin, user, id) {
+  const result = await env.DB.prepare('DELETE FROM games WHERE id = ? AND user_id = ?').bind(id, user.id).run();
+  if (!result.meta.changes) throw new HttpError(404, '棋谱不存在或已删除');
+  return response({ ok: true }, 200, origin, env);
+}
+
+async function saveOnlineRecord(request, env, origin, user) {
+  const body = await readJson(request);
+  const code = String(body.code || body.roomCode || '').toUpperCase();
+  if (!CODE_PATTERN.test(code)) throw new HttpError(400, '房间号格式不正确');
+  const roomToken = (request.headers.get('X-Room-Token') || '').trim();
+  if (!roomToken) throw new HttpError(401, '缺少房间身份');
+  const row = await loadRoom(env, code);
+  const seat = await seatFor(row, roomToken);
+  if (!seat) throw new HttpError(401, '房间身份无效');
+  const state = parseState(row);
+  if (state.phase !== 'ended' || !state.game?.result) throw new HttpError(409, '对局尚未结束，暂时不能保存棋谱');
+  const existing = await env.DB.prepare(
+    `SELECT * FROM games WHERE user_id = ? AND kind = 'online' AND room_code = ?`,
+  ).bind(user.id, code).first();
+  if (existing) return response({ game: gameMetadata(existing) }, 200, origin, env);
+
+  const gameState = savedGameState({ ...state.game, size: state.size, komi: state.komi });
+  const now = Date.now();
+  const id = crypto.randomUUID();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO games (id, user_id, kind, title, size, komi, phase, moves, winner, reason, room_code, state, created_at, updated_at)
+       VALUES (?, ?, 'online', ?, ?, ?, 'ended', ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      id, user.id, `联机对局 · ${code}`, gameState.size, gameState.komi, gameState.history.length,
+      Number.isInteger(gameState.result?.winner) ? gameState.result.winner : null,
+      typeof gameState.result?.reason === 'string' ? gameState.result.reason.slice(0, 40) : null,
+      code, JSON.stringify(gameState), now, now,
+    ).run();
+  } catch (error) {
+    const raced = await env.DB.prepare(
+      `SELECT * FROM games WHERE user_id = ? AND kind = 'online' AND room_code = ?`,
+    ).bind(user.id, code).first();
+    if (raced) return response({ game: gameMetadata(raced) }, 200, origin, env);
+    throw error;
+  }
+  const saved = await env.DB.prepare('SELECT * FROM games WHERE id = ?').bind(id).first();
+  return response({ game: gameMetadata(saved) }, 201, origin, env);
 }
 
 async function seatFor(row, token) {
@@ -494,6 +832,44 @@ export default {
       if (path === '/api/health' && request.method === 'GET') {
         return response({ ok: true, service: 'guqi-online' }, 200, origin, env);
       }
+
+      if (path === '/api/auth/register') {
+        if (request.method !== 'POST') throw new HttpError(405, '请求方法不支持');
+        return await registerUser(request, env, origin);
+      }
+      if (path === '/api/auth/login') {
+        if (request.method !== 'POST') throw new HttpError(405, '请求方法不支持');
+        return await loginUser(request, env, origin);
+      }
+      if (path === '/api/auth/logout') {
+        if (request.method !== 'POST') throw new HttpError(405, '请求方法不支持');
+        return await logoutUser(request, env, origin);
+      }
+      if (path === '/api/auth/me') {
+        if (request.method !== 'GET') throw new HttpError(405, '请求方法不支持');
+        return await getMe(request, env, origin);
+      }
+
+      if (path === '/api/games') {
+        const user = await requireAccount(request, env);
+        if (request.method === 'GET') return await listGames(request, env, origin, user);
+        if (request.method === 'POST') return await saveLocalGame(request, env, origin, user);
+        throw new HttpError(405, '请求方法不支持');
+      }
+      if (path === '/api/games/online') {
+        if (request.method !== 'POST') throw new HttpError(405, '请求方法不支持');
+        const user = await requireAccount(request, env);
+        return await saveOnlineRecord(request, env, origin, user);
+      }
+      const gameMatch = path.match(/^\/api\/games\/([A-Za-z0-9_-]{8,64})$/);
+      if (gameMatch) {
+        const user = await requireAccount(request, env);
+        const gameId = gameMatch[1];
+        if (request.method === 'GET') return await getSavedGame(request, env, origin, user, gameId);
+        if (request.method === 'DELETE') return await deleteSavedGame(request, env, origin, user, gameId);
+        throw new HttpError(405, '请求方法不支持');
+      }
+
       if (path === '/api/rooms' && request.method === 'POST') {
         return await createRoom(request, env, origin, ctx);
       }
