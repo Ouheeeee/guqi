@@ -696,7 +696,7 @@ h1 {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
     inset 0 0 50px rgba(103, 90, 66, 0.09),
-    0 8px 22px rgba(53, 45, 32, 0.1);
+    0 1px 2px rgba(53, 45, 32, 0.06);
   touch-action: manipulation;
 }
 
@@ -807,8 +807,8 @@ h1 {
 .stone-black {
   background: radial-gradient(circle at 33% 27%, #74706a 0%, #383631 27%, #151412 58%, #020202 100%);
   box-shadow:
-    0 2px 4px rgba(8, 7, 5, 0.42),
-    0 5px 9px rgba(8, 7, 5, 0.2),
+    0 1px 1.5px rgba(8, 7, 5, 0.42),
+    0 2px 3px rgba(8, 7, 5, 0.14),
     inset 1px 1px 2px rgba(255, 255, 255, 0.2),
     inset -2px -3px 5px rgba(0, 0, 0, 0.55);
 }
@@ -817,8 +817,8 @@ h1 {
   border: 1px solid rgba(61, 54, 43, 0.2);
   background: radial-gradient(circle at 33% 26%, #ffffff 0%, #fbf9f3 35%, #ebe7dd 66%, #d1cbbd 100%);
   box-shadow:
-    0 2px 4px rgba(53, 45, 32, 0.26),
-    0 5px 9px rgba(53, 45, 32, 0.12),
+    0 1px 1.5px rgba(53, 45, 32, 0.26),
+    0 2px 3px rgba(53, 45, 32, 0.09),
     inset 1px 1px 2px rgba(255, 255, 255, 0.96),
     inset -2px -3px 5px rgba(87, 76, 58, 0.12);
 }
@@ -1327,7 +1327,7 @@ h1 {
 .segmented button[aria-pressed="true"] {
   background: var(--card-strong);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(23, 22, 20, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(23, 22, 20, 0.055);
 }
 
 .segmented button[aria-pressed="true"] small {

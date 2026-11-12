@@ -154,7 +154,7 @@
 .auth-tab.is-active {
   background: var(--card-strong);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(23, 22, 20, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(23, 22, 20, 0.055);
 }
 
 .auth-field {
