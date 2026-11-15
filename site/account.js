@@ -6,7 +6,7 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.8.3';
+} from './auth-client.js?v=1.9.0';
 import {
   BLACK,
   WHITE,
@@ -17,7 +17,7 @@ import {
   komiRuleText,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.8.3';
+} from './game.js?v=1.9.0';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -41,6 +41,7 @@ const dom = {
   profileEmail: $('#profileEmail'),
   profileJoined: $('#profileJoined'),
   logoutBtn: $('#logoutBtn'),
+  exportRecords: $('#exportRecords'),
   localCount: $('#localCount'),
   onlineCount: $('#onlineCount'),
   localList: $('#localList'),
@@ -270,6 +271,45 @@ async function loadLibrary() {
     }
   } finally {
     dom.refreshLibrary.disabled = false;
+  }
+}
+
+async function exportRecords() {
+  if (!savedGames.length) {
+    showToast('还没有可导出的棋谱');
+    return;
+  }
+  const button = dom.exportRecords;
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = '打包中…';
+  try {
+    const details = await Promise.all(savedGames.map((game) => getSavedGame(game.id)));
+    const payload = {
+      format: 'guqi-records-v1',
+      exportedAt: new Date().toISOString(),
+      user: currentUser ? {
+        displayName: currentUser.displayName || '',
+        email: currentUser.email || '',
+      } : null,
+      games: details,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+    anchor.href = url;
+    anchor.download = `guqi-records-${stamp}.json`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    showToast(`已导出 ${details.length} 盘棋谱`);
+  } catch (error) {
+    showToast(error.message || '导出失败');
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
   }
 }
 
@@ -503,6 +543,7 @@ function bindEvents() {
   dom.registerTab.addEventListener('click', () => setAuthMode('register'));
   dom.authForm.addEventListener('submit', handleAuthSubmit);
   dom.logoutBtn.addEventListener('click', handleLogout);
+  dom.exportRecords.addEventListener('click', exportRecords);
   dom.refreshLibrary.addEventListener('click', loadLibrary);
   dom.recordClose.addEventListener('click', closeRecord);
   dom.replayFirst.addEventListener('click', () => { stopReplay(); renderReplay(0); });
