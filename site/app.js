@@ -25,13 +25,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.7.0';
+} from './game.js?v=1.8.0';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.7.0';
+} from './auth-client.js?v=1.8.0';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -78,8 +78,9 @@ const dom = {
   tryBtnText: document.querySelector('#tryBtnText'),
   tryPreviewBox: document.querySelector('#tryPreviewBox'),
   tryPreviewText: document.querySelector('#tryPreviewText'),
-  tryConfirmBtn: document.querySelector('#tryConfirmBtn'),
-  tryCancelBtn: document.querySelector('#tryCancelBtn'),
+  tryUndoBtn: document.querySelector('#tryUndoBtn'),
+  tryResetBtn: document.querySelector('#tryResetBtn'),
+  tryExitBtn: document.querySelector('#tryExitBtn'),
   accountLink: document.querySelector('#accountLink'),
   boardFullscreenBtn: document.querySelector('#boardFullscreenBtn'),
   immersiveExit: document.querySelector('#immersiveExit'),
@@ -118,7 +119,7 @@ let accountUser = null;
 let savingCloud = false;
 let boardImmersive = false;
 let tryMode = false;
-let tryPreviewIndex = null;
+let tryMoves = [];
 
 const phaseNames = {
   ready: '布局阶段',
@@ -226,49 +227,63 @@ function buildBoard() {
   }, 360);
 }
 
+function otherTryColor(color) {
+  return color === BLACK ? WHITE : BLACK;
+}
+
+function nextTryColor() {
+  return tryMoves.length % 2 === 0 ? game.turn : otherTryColor(game.turn);
+}
+
+function tryBoard() {
+  const board = game.board.slice();
+  for (const move of tryMoves) board[move.index] = move.color;
+  return board;
+}
+
 function syncBoard(animateIndex = null) {
   const size = game.size;
   const cells = dom.board.children;
   const isPlaying = game.phase === 'playing';
+  const board = tryMode ? tryBoard() : game.board;
+  const trialIndices = tryMode ? new Set(tryMoves.map((move) => move.index)) : null;
 
   dom.board.dataset.phase = game.phase;
-  dom.board.dataset.turn = String(game.turn);
+  dom.board.dataset.turn = String(tryMode ? nextTryColor() : game.turn);
   dom.board.classList.toggle('is-playing', isPlaying);
   dom.board.classList.toggle('is-ended', game.phase === 'ended');
 
   for (let index = 0; index < cells.length; index += 1) {
     const cell = cells[index];
-    const value = game.board[index];
+    const value = board[index];
     const occupied = value !== EMPTY;
-    const preview = tryMode && tryPreviewIndex === index && value === EMPTY;
-    const expectedColor = occupied ? String(value) : preview ? String(game.turn) : null;
+    const trial = Boolean(trialIndices?.has(index));
+    const expectedColor = occupied ? String(value) : null;
     let stone = cell.firstElementChild;
 
     cell.classList.toggle('occupied', occupied);
     cell.classList.toggle('is-black', value === BLACK);
     cell.classList.toggle('is-white', value === WHITE);
-    cell.classList.toggle('try-preview', preview);
+    cell.classList.toggle('try-preview', trial);
 
-    if (occupied || preview) {
-      if (!stone || stone.dataset.color !== expectedColor || stone.classList.contains('try-stone') !== preview) {
+    if (occupied) {
+      if (!stone || stone.dataset.color !== expectedColor || stone.classList.contains('try-stone') !== trial) {
         stone?.remove();
-        stone = stoneMarkup(preview ? game.turn : value);
-        if (preview) stone.classList.add('try-stone');
+        stone = stoneMarkup(value);
+        if (trial) stone.classList.add('try-stone');
         cell.append(stone);
       }
-      stone.classList.toggle('last', !preview && game.lastMove === index);
-      stone.classList.toggle('just-moved', !preview && animateIndex === index);
+      stone.classList.toggle('last', !trial && game.lastMove === index);
+      stone.classList.toggle('just-moved', !trial && animateIndex === index);
     } else if (stone) {
       stone.remove();
     }
 
     const coordinate = coordinateLabel(index, size);
     if (value === BLACK) {
-      cell.setAttribute('aria-label', `${coordinate}，黑棋`);
+      cell.setAttribute('aria-label', `${coordinate}，${trial ? '试下预览' : ''}黑棋`);
     } else if (value === WHITE) {
-      cell.setAttribute('aria-label', `${coordinate}，白棋`);
-    } else if (preview) {
-      cell.setAttribute('aria-label', `${coordinate}，试下预览${colorName(game.turn)}`);
+      cell.setAttribute('aria-label', `${coordinate}，${trial ? '试下预览' : ''}白棋`);
     } else {
       cell.setAttribute('aria-label', `${coordinate}，空位${isPlaying ? '，可落子' : ''}`);
     }
@@ -283,15 +298,8 @@ function bumpMetric(element) {
   element.classList.add('metric-bump');
 }
 
-function previewBoard() {
-  if (!tryMode || tryPreviewIndex === null) return game.board;
-  const board = game.board.slice();
-  board[tryPreviewIndex] = game.turn;
-  return board;
-}
-
 function renderStats({ animate = false } = {}) {
-  const counts = analyzeGroups(previewBoard(), game.size);
+  const counts = analyzeGroups(tryMode ? tryBoard() : game.board, game.size);
   dom.scorePanel.classList.toggle('is-preview', tryMode);
   const blackDisplay = countVisible ? String(counts.black) : '—';
   const whiteDisplay = countVisible ? String(counts.white) : '—';
@@ -330,7 +338,8 @@ function renderStats({ animate = false } = {}) {
   const hiddenNote = countVisible ? '' : ' · 孤棋数已隐藏';
   const matchNote = `第 ${activeNumber()} 场`;
   if (tryMode) {
-    const previewNote = tryPreviewIndex === null ? '点击空格试放' : `试放 ${coordinateLabel(tryPreviewIndex, game.size)}`;
+    const last = tryMoves[tryMoves.length - 1];
+    const previewNote = last ? `第 ${tryMoves.length} 手 · ${colorName(last.color)} ${coordinateLabel(last.index, game.size)}` : '点击空格开始';
     dom.scoreFoot.textContent = `${matchNote} · 试下预览 · ${previewNote}${hiddenNote}`;
   } else if (game.phase === 'ready') {
     const preset = PRESET_COUNT[game.size];
@@ -366,16 +375,20 @@ function renderStatus() {
   }
 
   if (tryMode) {
+    const last = tryMoves[tryMoves.length - 1];
     dom.phaseBadge.dataset.phase = 'try';
     dom.phaseText.textContent = '试下';
-    dom.statusTitle.textContent = tryPreviewIndex === null ? '试下：选择落点' : '试下预览';
-    dom.statusSub.textContent = tryPreviewIndex === null
-      ? '点击棋盘空格试放一子；确认后才会正式落子。'
-      : `预览 ${colorName(game.turn)} 落在 ${coordinateLabel(tryPreviewIndex, game.size)} 后的间数。`;
+    dom.statusTitle.textContent = last ? '试下预览' : '试下：连续摆子';
+    dom.statusSub.textContent = last
+      ? `已试下 ${tryMoves.length} 手，轮到${colorName(nextTryColor())}；不会写入棋谱。`
+      : '点击棋盘空格连续试下；不会写入棋谱。';
   }
 
   if (tryMode) {
-    dom.lastMoveText.textContent = '试下预览 · 尚未落子';
+    const last = tryMoves[tryMoves.length - 1];
+    dom.lastMoveText.textContent = last
+      ? `试下预览 · 第 ${tryMoves.length} 手 ${colorName(last.color)} ${coordinateLabel(last.index, game.size)}`
+      : '试下预览 · 点击空格开始';
   } else if (phase === 'ready') {
     dom.lastMoveText.textContent = '等待开始对局';
   } else if (phase === 'ended') {
@@ -409,11 +422,13 @@ function renderControls() {
   dom.tryBtn.classList.toggle('is-active', tryMode);
   dom.tryBtnText.textContent = tryMode ? '试下中' : '试下';
   dom.tryPreviewBox.hidden = !tryMode;
-  dom.tryPreviewText.textContent = tryPreviewIndex === null
-    ? '点击棋盘空格，试放一子预览间数。'
-    : `预览 ${colorName(game.turn)} ${coordinateLabel(tryPreviewIndex, game.size)}，确认后才会正式落子。`;
-  dom.tryConfirmBtn.disabled = tryPreviewIndex === null;
-  dom.tryCancelBtn.disabled = !tryMode;
+  const tryLast = tryMoves[tryMoves.length - 1];
+  dom.tryPreviewText.textContent = tryLast
+    ? `已试下 ${tryMoves.length} 手，下一步轮${colorName(nextTryColor())}；不会写入棋谱。`
+    : '点击空格连续试下；不会写入棋谱。';
+  dom.tryUndoBtn.disabled = tryMoves.length === 0;
+  dom.tryResetBtn.disabled = tryMoves.length === 0;
+  dom.tryExitBtn.disabled = !tryMode;
   dom.saveBtn.hidden = !accountUser;
   dom.saveBtn.disabled = savingCloud || locked;
   if (dom.saveBtnHint) dom.saveBtnHint.textContent = game.cloudId ? '更新存档' : '云端存档';
@@ -671,7 +686,7 @@ function switchMatch(id, { focusTab = false, announce = true } = {}) {
   closeResult({ restoreFocus: false });
   resetPendingClose();
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   activeMatchId = target.id;
   game = target;
   previousCounts = null;
@@ -683,7 +698,7 @@ function switchMatch(id, { focusTab = false, announce = true } = {}) {
 
 function handleNewGame() {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   if (matches.length >= MAX_MATCHES) {
     showToast(`最多同时保留 ${MAX_MATCHES} 场对局，请先关闭一场`);
     return;
@@ -711,7 +726,7 @@ function handleNewGame() {
 
 function handleRegenerate() {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   const previousSignature = game.board.join('');
   const next = makeSession({
     size: game.size,
@@ -730,7 +745,7 @@ function handleRegenerate() {
 
 function handleStart() {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   if (game.phase !== 'ready') return;
   commitActive(startGame(game));
   renderAll();
@@ -740,7 +755,7 @@ function handleStart() {
 
 function handleUndo() {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   if (game.history.length === 0) return;
   clearResultTimer();
   closeResult({ restoreFocus: false });
@@ -751,7 +766,7 @@ function handleUndo() {
 
 function handleResign() {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   if (game.phase !== 'playing') return;
   commitActive(resignGame(game));
   renderAll({ animateCounts: true });
@@ -760,7 +775,7 @@ function handleResign() {
 
 function handleSettle() {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   if (game.phase !== 'playing') return;
   commitActive(settleGame(game));
   renderAll({ animateCounts: true });
@@ -770,27 +785,27 @@ function handleSettle() {
 function setTryMode(enabled) {
   if (!enabled) {
     tryMode = false;
-    tryPreviewIndex = null;
+    tryMoves = [];
     renderAll();
     return;
   }
   if (game.phase !== 'playing' || tryMode) return;
   tryMode = true;
-  tryPreviewIndex = null;
+  tryMoves = [];
   renderAll();
-  showToast('试下模式：点击空格预览，确认后才落子');
+  showToast('试下模式：连续摆子预览，不写入棋谱');
 }
 
-function confirmTryMove() {
-  if (!tryMode || tryPreviewIndex === null) {
-    showToast('请先点击一个空格试下');
-    return;
-  }
-  const index = tryPreviewIndex;
-  tryMode = false;
-  tryPreviewIndex = null;
-  handleCell(index);
-  showToast('已确认落子');
+function undoTryMove() {
+  if (!tryMode || tryMoves.length === 0) return;
+  tryMoves.pop();
+  renderAll();
+}
+
+function resetTryMoves() {
+  if (!tryMode) return;
+  tryMoves = [];
+  renderAll();
 }
 
 function setBoardImmersive(enabled) {
@@ -869,7 +884,7 @@ async function restoreCloudSave() {
     const initial = matches[0];
     if (!initial) return;
     tryMode = false;
-    tryPreviewIndex = null;
+    tryMoves = [];
     const hydrated = { ...loaded, id: initial.id, cloudId: saved.id };
     matches[0] = hydrated;
     activeMatchId = hydrated.id;
@@ -907,7 +922,9 @@ function handleCell(index) {
   if (!Number.isInteger(index) || game.board[index] !== EMPTY) return;
 
   if (tryMode) {
-    tryPreviewIndex = tryPreviewIndex === index ? null : index;
+    const board = tryBoard();
+    if (board[index] !== EMPTY) return;
+    tryMoves.push({ index, color: nextTryColor() });
     renderAll();
     return;
   }
@@ -922,7 +939,7 @@ function handleCell(index) {
 
 function handleSizeChange(size) {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   if (!BOARD_SIZES.includes(size) || size === game.size) return;
   clearResultTimer();
   closeResult({ restoreFocus: false });
@@ -950,7 +967,7 @@ function handleKomiChange(komi) {
 
 function closeMatch(matchId) {
   tryMode = false;
-  tryPreviewIndex = null;
+  tryMoves = [];
   const index = matches.findIndex((match) => match.id === matchId);
   if (index === -1) return;
 
@@ -1129,8 +1146,9 @@ dom.undoBtn.addEventListener('click', handleUndo);
 dom.resignBtn.addEventListener('click', handleResign);
 dom.settleBtn.addEventListener('click', handleSettle);
 dom.tryBtn.addEventListener('click', () => setTryMode(!tryMode));
-dom.tryConfirmBtn.addEventListener('click', confirmTryMove);
-dom.tryCancelBtn.addEventListener('click', () => setTryMode(false));
+dom.tryUndoBtn.addEventListener('click', undoTryMove);
+dom.tryResetBtn.addEventListener('click', resetTryMoves);
+dom.tryExitBtn.addEventListener('click', () => setTryMode(false));
 dom.saveBtn.addEventListener('click', handleSaveCloud);
 dom.boardFullscreenBtn.addEventListener('click', () => setBoardImmersive(!boardImmersive));
 dom.immersiveExit.addEventListener('click', () => setBoardImmersive(false));
@@ -1180,7 +1198,7 @@ Object.defineProperty(window, '__guqi', {
         activeIndex: activeIndex(),
         cloudId: game.cloudId ?? null,
         tryMode,
-        tryPreviewIndex,
+        tryMoves,
         size: game.size,
         komi: game.komi,
         phase: game.phase,

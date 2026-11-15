@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.7.0">
+  <link rel="stylesheet" href="./styles.css?v=1.8.0">
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true" width="0" height="0">
@@ -210,10 +210,11 @@
         </div>
 
         <div class="try-preview-box" id="tryPreviewBox" hidden>
-          <p id="tryPreviewText">点击棋盘空格，试放一子预览间数。</p>
+          <p id="tryPreviewText">点击空格连续试下；不会写入棋谱。</p>
           <div class="try-preview-actions">
-            <button type="button" class="btn btn-primary" id="tryConfirmBtn">确认落子</button>
-            <button type="button" class="btn btn-soft" id="tryCancelBtn">取消</button>
+            <button type="button" class="btn btn-soft" id="tryUndoBtn">悔一手</button>
+            <button type="button" class="btn btn-soft" id="tryResetBtn">重来</button>
+            <button type="button" class="btn btn-soft" id="tryExitBtn">退出</button>
           </div>
         </div>
 
@@ -322,6 +323,6 @@
     </section>
   </div>
 
-  <script type="module" src="./app.js?v=1.7.0"></script>
+  <script type="module" src="./app.js?v=1.8.0"></script>
 </body>
 </html>

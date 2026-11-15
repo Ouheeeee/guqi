@@ -6,7 +6,7 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.7.0';
+} from './auth-client.js?v=1.8.0';
 import {
   BLACK,
   WHITE,
@@ -17,7 +17,7 @@ import {
   komiRuleText,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.7.0';
+} from './game.js?v=1.8.0';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -56,6 +56,17 @@ const dom = {
   recordScores: $('#recordScores'),
   recordCopy: $('#recordCopy'),
   recordMoves: $('#recordMoves'),
+  recordStepLabel: $('#recordStepLabel'),
+  recordLastMove: $('#recordLastMove'),
+  replayBoard: $('#replayBoard'),
+  replayCoordTop: $('#replayCoordTop'),
+  replayCoordLeft: $('#replayCoordLeft'),
+  replayFirst: $('#replayFirst'),
+  replayPrev: $('#replayPrev'),
+  replayPlay: $('#replayPlay'),
+  replayNext: $('#replayNext'),
+  replayLast: $('#replayLast'),
+  replaySlider: $('#replaySlider'),
   toast: $('#toast'),
 };
 
@@ -65,6 +76,8 @@ let savedGames = [];
 let toastTimer = null;
 let recordOpener = null;
 let lastRecordOrder = '';
+let replayState = null;
+let replayTimer = null;
 const returnTo = safeReturnTo(new URLSearchParams(location.search).get('return'));
 
 function safeReturnTo(raw) {
@@ -272,6 +285,103 @@ async function removeGame(game) {
   }
 }
 
+function stopReplay() {
+  if (replayTimer) window.clearInterval(replayTimer);
+  replayTimer = null;
+  if (dom.replayPlay) dom.replayPlay.textContent = '播放';
+}
+
+function renderReplay(step) {
+  if (!replayState) return;
+  const history = replayState.history;
+  const total = history.length;
+  const current = Math.max(0, Math.min(total, Number(step) || 0));
+  replayState.step = current;
+  const position = replayState.start.slice();
+  for (let index = 0; index < current; index += 1) {
+    const move = history[index];
+    position[move.index] = move.color;
+  }
+  const lastMove = current > 0 ? history[current - 1] : null;
+  const size = replayState.size;
+  dom.replayBoard.replaceChildren();
+  const fragment = document.createDocumentFragment();
+  for (let index = 0; index < position.length; index += 1) {
+    const cell = makeElement('div', 'replay-cell');
+    const value = position[index];
+    if (value === BLACK || value === WHITE) {
+      const stone = makeElement('span', `replay-stone ${value === WHITE ? 'is-white' : 'is-black'}`);
+      if (lastMove && lastMove.index === index) stone.classList.add('is-last');
+      cell.append(stone);
+    }
+    fragment.append(cell);
+  }
+  dom.replayBoard.append(fragment);
+  dom.replayBoard.setAttribute('aria-label', `棋谱回放，第 ${current} 手，共 ${total} 手`);
+  dom.recordStepLabel.textContent = `第 ${current} / ${total} 手`;
+  dom.recordLastMove.textContent = lastMove
+    ? `${colorName(lastMove.color)} ${coordinateLabel(lastMove.index, size)}`
+    : '初始局面';
+  dom.replaySlider.max = String(total);
+  dom.replaySlider.value = String(current);
+  dom.replayFirst.disabled = current === 0;
+  dom.replayPrev.disabled = current === 0;
+  dom.replayPlay.disabled = total === 0;
+  dom.replayNext.disabled = current === total;
+  dom.replayLast.disabled = current === total;
+  for (const item of dom.recordMoves.querySelectorAll('[data-step]')) {
+    item.classList.toggle('is-current', Number(item.dataset.step) === current);
+  }
+}
+
+function buildReplayShell(size) {
+  const columns = Array.from({ length: size }, (_, index) => String.fromCharCode(65 + index));
+  dom.replayCoordTop.replaceChildren(...columns.map((label) => makeElement('span', '', label)));
+  dom.replayCoordLeft.replaceChildren(
+    ...Array.from({ length: size }, (_, index) => makeElement('span', '', String(index + 1))),
+  );
+  dom.replayCoordTop.style.setProperty('--n', String(size));
+  dom.replayCoordLeft.style.setProperty('--n', String(size));
+  dom.replayBoard.style.setProperty('--n', String(size));
+}
+
+function startReplay(state) {
+  stopReplay();
+  const size = Number(state.size);
+  const history = Array.isArray(state.history) ? state.history : [];
+  const start = Array.isArray(state.board) ? state.board.slice() : new Array(size * size).fill(0);
+  for (const move of history) {
+    if (Number.isInteger(move.index) && move.index >= 0 && move.index < start.length) start[move.index] = 0;
+  }
+  replayState = { size, history, start, step: 0 };
+  buildReplayShell(size);
+  renderReplay(0);
+}
+
+function stepReplay(delta) {
+  if (!replayState) return;
+  stopReplay();
+  renderReplay(replayState.step + delta);
+}
+
+function toggleReplay() {
+  if (!replayState || !replayState.history.length) return;
+  if (replayTimer) {
+    stopReplay();
+    return;
+  }
+  if (replayState.step >= replayState.history.length) renderReplay(0);
+  dom.replayPlay.textContent = '暂停';
+  replayTimer = window.setInterval(() => {
+    if (!replayState) { stopReplay(); return; }
+    if (replayState.step >= replayState.history.length) {
+      stopReplay();
+      return;
+    }
+    renderReplay(replayState.step + 1);
+  }, 620);
+}
+
 async function openRecord(game) {
   recordOpener = document.activeElement;
   dom.recordTitle.textContent = game.title;
@@ -279,6 +389,8 @@ async function openRecord(game) {
   dom.recordSummary.textContent = '正在读取棋谱…';
   dom.recordScores.replaceChildren();
   dom.recordMoves.replaceChildren();
+  stopReplay();
+  replayState = null;
   dom.recordModal.hidden = false;
   dom.recordClose.focus({ preventScroll: true });
   try {
@@ -296,8 +408,10 @@ async function openRecord(game) {
     } else {
       dom.recordSummary.textContent = `${detail.size} 路 · ${komiLabel(detail.komi)} · ${detail.phase === 'playing' ? '进行中' : '待开始'} · 共 ${detail.moves} 手`;
     }
+    startReplay(state);
     if (!state.history.length) {
       dom.recordMoves.append(makeElement('li', 'record-empty', '还没有落子。'));
+      lastRecordOrder = '';
       return;
     }
     const orderLines = [];
@@ -306,11 +420,13 @@ async function openRecord(game) {
       const text = `${colorName(move.color)} ${coordinateLabel(move.index, state.size)}`;
       orderLines.push(`${number}. ${text}`);
       const item = makeElement('li', move.color === WHITE ? 'is-white' : '');
+      item.dataset.step = String(orderLines.length);
       item.append(makeElement('strong', '', number));
       item.append(makeElement('em', '', text));
       dom.recordMoves.append(item);
     }
     lastRecordOrder = orderLines.join('\n');
+    renderReplay(0);
   } catch (error) {
     dom.recordSummary.textContent = error.message || '棋谱读取失败';
   }
@@ -318,6 +434,7 @@ async function openRecord(game) {
 
 function closeRecord() {
   if (dom.recordModal.hidden) return;
+  stopReplay();
   dom.recordModal.hidden = true;
   if (recordOpener && document.contains(recordOpener)) {
     recordOpener.focus({ preventScroll: true });
@@ -388,6 +505,25 @@ function bindEvents() {
   dom.logoutBtn.addEventListener('click', handleLogout);
   dom.refreshLibrary.addEventListener('click', loadLibrary);
   dom.recordClose.addEventListener('click', closeRecord);
+  dom.replayFirst.addEventListener('click', () => { stopReplay(); renderReplay(0); });
+  dom.replayPrev.addEventListener('click', () => stepReplay(-1));
+  dom.replayNext.addEventListener('click', () => stepReplay(1));
+  dom.replayLast.addEventListener('click', () => {
+    if (!replayState) return;
+    stopReplay();
+    renderReplay(replayState.history.length);
+  });
+  dom.replayPlay.addEventListener('click', toggleReplay);
+  dom.replaySlider.addEventListener('input', () => {
+    stopReplay();
+    renderReplay(Number(dom.replaySlider.value));
+  });
+  dom.recordMoves.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-step]');
+    if (!item) return;
+    stopReplay();
+    renderReplay(Number(item.dataset.step));
+  });
   dom.recordCopy.addEventListener('click', async () => {
     if (!lastRecordOrder) return;
     try {

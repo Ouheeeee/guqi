@@ -2577,3 +2577,7 @@ body.board-immersive .immersive-exit {
   color: var(--accent);
   box-shadow: inset 0 0 0 1px rgba(173, 70, 52, 0.1);
 }
+
+.try-preview-actions {
+  grid-template-columns: repeat(3, 1fr);
+}

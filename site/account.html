@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋账户：登录后保存对局、继续本地棋局、查看联机棋谱。离线对局无需登录。">
   <title>账户 · 孤棋</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.7.0">
-  <link rel="stylesheet" href="./account.css?v=1.7.0">
+  <link rel="stylesheet" href="./styles.css?v=1.8.0">
+  <link rel="stylesheet" href="./account.css?v=1.8.0">
 </head>
 <body class="account-body">
   <a class="skip-link" href="#accountMain">跳到账户内容</a>
@@ -151,12 +151,35 @@
       <p class="eyebrow"><span>GAME RECORD</span><span class="eyebrow-rule" aria-hidden="true"></span><span id="recordKind">棋谱</span></p>
       <h2 id="recordTitle">对局棋谱</h2>
       <p class="record-summary" id="recordSummary"></p>
-      <div class="record-scores" id="recordScores"></div>
-      <div class="record-order-head">
-        <span>行棋顺序</span>
-        <button type="button" class="text-button" id="recordCopy">复制棋谱</button>
+      <div class="record-viewer">
+        <div class="record-board-panel">
+          <div class="replay-shell">
+            <div class="replay-coords replay-coords-top" id="replayCoordTop" aria-hidden="true"></div>
+            <div class="replay-coords replay-coords-left" id="replayCoordLeft" aria-hidden="true"></div>
+            <div class="replay-board" id="replayBoard" role="img" aria-label="棋谱回放棋盘"></div>
+          </div>
+          <div class="replay-status">
+            <span id="recordStepLabel">第 0 手</span>
+            <span id="recordLastMove">初始局面</span>
+          </div>
+          <div class="replay-controls">
+            <button type="button" class="replay-btn" id="replayFirst" aria-label="回到第一手" title="第一手">⏮</button>
+            <button type="button" class="replay-btn" id="replayPrev" aria-label="上一手" title="上一手">‹</button>
+            <button type="button" class="replay-btn replay-play" id="replayPlay" aria-label="自动播放" title="自动播放">播放</button>
+            <button type="button" class="replay-btn" id="replayNext" aria-label="下一手" title="下一手">›</button>
+            <button type="button" class="replay-btn" id="replayLast" aria-label="跳到最后" title="最后">⏭</button>
+          </div>
+          <input class="replay-slider" id="replaySlider" type="range" min="0" max="0" value="0" step="1" aria-label="棋谱进度" />
+        </div>
+        <div class="record-detail-panel">
+          <div class="record-scores" id="recordScores"></div>
+          <div class="record-order-head">
+            <span>行棋顺序</span>
+            <button type="button" class="text-button" id="recordCopy">复制棋谱</button>
+          </div>
+          <ol class="record-moves" id="recordMoves"></ol>
+        </div>
       </div>
-      <ol class="record-moves" id="recordMoves"></ol>
     </section>
   </div>
 
@@ -166,6 +189,6 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./account.js?v=1.7.0"></script>
+  <script type="module" src="./account.js?v=1.8.0"></script>
 </body>
 </html>

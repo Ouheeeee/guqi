@@ -816,3 +816,225 @@
   font-family: var(--sans);
   letter-spacing: 0;
 }
+
+/* Record replay viewer */
+
+.account-modal-card {
+  width: min(100%, 940px);
+  max-height: min(88vh, 840px);
+  padding: 30px 32px;
+}
+
+.record-viewer {
+  display: grid;
+  grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.record-board-panel {
+  min-width: 0;
+}
+
+.replay-shell {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-rows: 18px minmax(0, 1fr);
+  gap: 4px;
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+}
+
+.replay-coords {
+  color: var(--muted-soft);
+  font-family: var(--mono);
+  font-size: 7px;
+  line-height: 1;
+}
+
+.replay-coords-top {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  align-items: end;
+  text-align: center;
+}
+
+.replay-coords-left {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: repeat(var(--n), 1fr);
+  align-items: center;
+  text-align: right;
+}
+
+.replay-board {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(61, 56, 47, 0.32);
+  background: var(--board);
+  box-shadow: 0 8px 24px rgba(45, 38, 27, 0.08);
+}
+
+.replay-cell {
+  position: relative;
+  min-width: 0;
+  box-shadow: inset -1px -1px 0 rgba(61, 56, 47, 0.17);
+}
+
+.replay-stone {
+  position: absolute;
+  inset: 7%;
+  border-radius: 50%;
+}
+
+.replay-stone.is-black {
+  background: radial-gradient(circle at 34% 28%, #5f5b53, #171614 62%);
+  box-shadow: 0 1px 2px rgba(23, 22, 20, 0.28);
+}
+
+.replay-stone.is-white {
+  inset: 8%;
+  border: 1px solid rgba(23, 22, 20, 0.2);
+  background: radial-gradient(circle at 34% 28%, #fffdf8, #e5dfd1 70%);
+  box-shadow: 0 1px 2px rgba(23, 22, 20, 0.14);
+}
+
+.replay-stone.is-last::after {
+  content: "";
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.replay-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  max-width: 390px;
+  margin: 10px auto 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+}
+
+.replay-status span:last-child {
+  color: var(--graphite);
+}
+
+.replay-controls {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  max-width: 390px;
+  margin: 10px auto 0;
+}
+
+.replay-btn {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--graphite);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.replay-btn:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.replay-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.replay-play {
+  font-family: var(--sans);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+.replay-slider {
+  display: block;
+  width: min(100%, 390px);
+  margin: 9px auto 0;
+  accent-color: var(--ink);
+}
+
+.record-detail-panel {
+  min-width: 0;
+  max-height: min(66vh, 650px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.record-detail-panel .record-scores {
+  margin-top: 0;
+}
+
+.record-detail-panel .record-order-head {
+  margin-top: 0;
+}
+
+.record-detail-panel .record-moves {
+  padding-top: 8px;
+}
+
+.record-moves li[data-step] {
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.record-moves li[data-step]:hover {
+  background: rgba(23, 22, 20, 0.035);
+}
+
+.record-moves li.is-current {
+  background: rgba(173, 70, 52, 0.07);
+}
+
+.record-moves li.is-current strong {
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .account-modal-card {
+    width: min(100% - 24px, 600px);
+    max-height: 92vh;
+    padding: 22px 18px;
+  }
+
+  .record-viewer {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .replay-shell {
+    max-width: 340px;
+  }
+
+  .replay-status,
+  .replay-controls,
+  .replay-slider {
+    max-width: 340px;
+  }
+
+  .record-detail-panel {
+    max-height: none;
+    overflow: visible;
+  }
+}
