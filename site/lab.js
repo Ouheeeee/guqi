@@ -141,7 +141,7 @@ function renderStats() {
   dom.phase.textContent = ended
     ? '终局 · 精确计分'
     : rem.activeMerges === 0
-      ? `官子阶段 · ${rem.empty} 空点 / ${rem.neutralBoth} 中性单关`
+      ? `官子阶段 · 中性 ${rem.neutralBoth} / 双方各加一 ${rem.doubleNew} / 单方新块 ${rem.blackOnlyNew + rem.whiteOnlyNew}`
       : `${source.title} · 第 ${step} 手 · 黑 ${adjusted.black} / 白 ${adjusted.white} · 单关 ${rem.neutralBoth}`;
 }
 
@@ -347,6 +347,9 @@ function remainingStats(board, size, starter) {
   const analysis = analyzeGroups(board, size);
   let empty = 0;
   let neutralBoth = 0;
+  let doubleNew = 0;
+  let blackOnlyNew = 0;
+  let whiteOnlyNew = 0;
   let activeMerges = 0;
   let creations = 0;
   for (let index = 0; index < board.length; index += 1) {
@@ -366,10 +369,13 @@ function remainingStats(board, size, starter) {
     const blackDelta = adjacent[BLACK].size === 0 ? 1 : 1 - adjacent[BLACK].size;
     const whiteDelta = adjacent[WHITE].size === 0 ? 1 : 1 - adjacent[WHITE].size;
     if (blackDelta === 0 && whiteDelta === 0) neutralBoth += 1;
+    else if (blackDelta > 0 && whiteDelta > 0) doubleNew += 1;
+    else if (blackDelta > 0) blackOnlyNew += 1;
+    else if (whiteDelta > 0) whiteOnlyNew += 1;
     if (blackDelta < 0 || whiteDelta < 0) activeMerges += 1;
     if (blackDelta > 0 || whiteDelta > 0) creations += 1;
   }
-  return { empty, neutralBoth, activeMerges, creations };
+  return { empty, neutralBoth, doubleNew, blackOnlyNew, whiteOnlyNew, activeMerges, creations };
 }
 
 function solveExact(board, starter, size, timeLimit = EXACT_TIME_LIMIT) {
@@ -534,16 +540,28 @@ function estimate() {
 }
 
 function showQuietExact(stats) {
-  const result = exactResult();
+  const analysis = analyzeGroups(position, source.size);
+  let black = analysis.black;
+  let white = analysis.white;
+  const neutral = stats.neutralBoth;
+  const pairs = stats.doubleNew;
+  if (pairs > 0) {
+    const firstIsBlack = (neutral % 2 === 0 ? turn : otherColor(turn)) === BLACK;
+    const firstCount = Math.ceil(pairs / 2);
+    const secondCount = Math.floor(pairs / 2);
+    if (firstIsBlack) { black += firstCount; white += secondCount; }
+    else { white += firstCount; black += secondCount; }
+  }
+  const result = judgeScores({ black, white }, source.komi);
   const lead = Math.abs(result.adjustedScores.black - result.adjustedScores.white);
   const winner = result.winner === BLACK ? '黑胜' : '白胜';
   dom.verdict.replaceChildren(makeElement('p', '', ''),
     makeElement('p', '', ''));
   dom.verdict.children[0].innerHTML = `<strong class="is-exact">官子已定</strong> · ${winner}`;
-  dom.verdict.children[1].textContent = `${stats.empty} 个剩余点全是双方的中性单关，填子顺序不改变块数；按当前块数和贴目直接判定：${winner}，差 ${formatNumber(lead)} 间。`;
+  dom.verdict.children[1].textContent = `${stats.empty} 个剩余点：${neutral} 个双方中性单关，${pairs} 个“谁下谁加一块”的对称点；按等待与交替直接精确计算，${winner}，差 ${formatNumber(lead)} 间。`;
   dom.winbar.hidden = true;
   dom.candidates.replaceChildren();
-  dom.meta.textContent = `官子判定 · ${stats.neutralBoth} 个中性单关 · ${source.size} 路`;
+  dom.meta.textContent = `官子闭式判定 · 中性 ${neutral} / 双方各加一 ${pairs} · ${source.size} 路`;
 }
 
 function showExactSolve(result) {
@@ -609,7 +627,7 @@ async function runAnalysis({ judgeOnly = false } = {}) {
   const emptyCount = countEmpty(position);
   const stats = remainingStats(position, source.size, turn);
   let note = '';
-  if (stats.empty > 0 && stats.neutralBoth === stats.empty) {
+  if (stats.empty > 0 && stats.activeMerges === 0 && stats.blackOnlyNew === 0 && stats.whiteOnlyNew === 0) {
     showQuietExact(stats);
     busy = false;
     dom.judge.disabled = false;
@@ -632,7 +650,7 @@ async function runAnalysis({ judgeOnly = false } = {}) {
     } else {
       note = stats.activeMerges === 0
         ? `官子阶段：${emptyCount} 个空点，${stats.neutralBoth} 个双方中性单关；暂无合并点。`
-        : `${emptyCount} 个空点，其中 ${stats.activeMerges} 个有效合并点、${stats.neutralBoth} 个中性单关；超出实时精确求解范围。`;
+        : `${emptyCount} 个空点：${stats.neutralBoth} 中性、${stats.doubleNew} 双方各加一、${stats.blackOnlyNew + stats.whiteOnlyNew} 单方新块、${stats.activeMerges} 有效合并点；超出实时精确求解范围。`;
     }
     dom.verdict.replaceChildren(makeElement('p', '', '精确搜索未完成，继续跑启发式模拟…'));
     await new Promise((resolve) => window.setTimeout(resolve, 20));
