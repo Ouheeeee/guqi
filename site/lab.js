@@ -24,6 +24,7 @@ const dom = {
   aiStart: $('#aiStart'),
   aiExit: $('#aiExit'),
   aiSide: $('#aiSide'),
+  aiLevel: $('#aiLevel'),
   aiStatus: $('#aiStatus'),
   stepBar: $('#labStep'),
   slider: $('#labSlider'),
@@ -65,6 +66,7 @@ let aiMode = false;
 let aiHumanColor = BLACK;
 let aiThinking = false;
 let aiTimer = null;
+let aiLevel = 'mcts';
 
 function otherColor(color) {
   return color === BLACK ? WHITE : BLACK;
@@ -756,6 +758,46 @@ function chooseAiMove(board, size, color) {
   return picks[Math.floor(Math.random() * picks.length)];
 }
 
+function chooseMctsMove(board, size, color) {
+  const candidates = makeRootCandidates().slice(0, 6);
+  if (!candidates.length) return chooseAiMove(board, size, color);
+  const stats = candidates.map((candidate) => ({
+    index: candidate.index,
+    rollouts: 0,
+    wins: 0,
+    lead: 0,
+  }));
+  const deadline = performance.now() + 220;
+  const runOne = (item) => {
+    const next = board.slice();
+    next[item.index] = color;
+    const outcome = simulateGame(next, otherColor(color), size);
+    item.rollouts += 1;
+    if (outcome.winner === color) item.wins += 1;
+    item.lead += outcome.blackLead;
+  };
+  for (const item of stats) {
+    if (performance.now() >= deadline) break;
+    runOne(item);
+  }
+  let progressed = true;
+  while (progressed && performance.now() < deadline) {
+    progressed = false;
+    for (const item of stats) {
+      if (performance.now() >= deadline) break;
+      runOne(item);
+      progressed = true;
+    }
+  }
+  const scored = stats.map((item) => ({
+    ...item,
+    rate: item.rollouts ? item.wins / item.rollouts : 0,
+    averageLead: item.rollouts ? item.lead / item.rollouts : 0,
+  }));
+  scored.sort((a, b) => b.rate - a.rate || b.averageLead - a.averageLead);
+  return scored[0].index;
+}
+
 function placeAiMove(index, color) {
   if (position[index] !== EMPTY) return false;
   position[index] = color;
@@ -782,7 +824,7 @@ function placeAiMove(index, color) {
 function scheduleAiMove() {
   if (!aiMode || ended || aiThinking || turn === aiHumanColor) return;
   aiThinking = true;
-  updateAiStatus('AI 思考中…');
+  updateAiStatus(aiLevel === 'mcts' ? 'MCTS 思考中…' : 'AI 思考中…');
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
     if (!aiMode || ended || turn === aiHumanColor) { aiThinking = false; return; }
@@ -792,7 +834,9 @@ function scheduleAiMove() {
       const solved = solveExact(position, turn, source.size, 3000);
       if (solved.solved && solved.bestMove >= 0) index = solved.bestMove;
     }
-    if (index < 0) index = chooseAiMove(position, source.size, turn);
+    if (index < 0) index = aiLevel === 'mcts' && empty <= 70
+      ? chooseMctsMove(position, source.size, turn)
+      : chooseAiMove(position, source.size, turn);
     if (index >= 0) placeAiMove(index, turn);
     aiThinking = false;
     if (!ended) updateAiStatus(turn === aiHumanColor ? '轮到你' : 'AI 思考中…');
@@ -836,7 +880,7 @@ function handleAiBoard(event) {
   const color = turn;
   if (!placeAiMove(index, color)) return;
   if (!ended) {
-    updateAiStatus('AI 思考中…');
+    updateAiStatus(aiLevel === 'mcts' ? 'MCTS 思考中…' : 'AI 思考中…');
     scheduleAiMove();
   }
 }
@@ -917,7 +961,8 @@ dom.judge.addEventListener('click', () => runAnalysis({ judgeOnly: true }));
 dom.analyze.addEventListener('click', () => runAnalysis({ judgeOnly: false }));
 
 dom.demoSize.addEventListener('change', () => { if (!aiMode) startDemo(Number(dom.demoSize.value)); });
-dom.aiStart.addEventListener('click', startAiGame);
+dom.aiLevel.addEventListener('change', () => { aiLevel = dom.aiLevel.value; });
+  dom.aiStart.addEventListener('click', startAiGame);
 dom.aiExit.addEventListener('click', () => { stopAiMode(); startDemo(Number(dom.demoSize.value) || 13); });
 dom.board.addEventListener('click', handleAiBoard);
 startDemo(Number(dom.demoSize.value) || 13);
