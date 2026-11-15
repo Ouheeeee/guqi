@@ -25,13 +25,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.8.0';
+} from './game.js?v=1.8.2';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.8.0';
+} from './auth-client.js?v=1.8.2';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -246,7 +246,9 @@ function syncBoard(animateIndex = null) {
   const cells = dom.board.children;
   const isPlaying = game.phase === 'playing';
   const board = tryMode ? tryBoard() : game.board;
-  const trialIndices = tryMode ? new Set(tryMoves.map((move) => move.index)) : null;
+  const trialNumbers = tryMode
+    ? new Map(tryMoves.map((move, moveIndex) => [move.index, moveIndex + 1]))
+    : null;
 
   dom.board.dataset.phase = game.phase;
   dom.board.dataset.turn = String(tryMode ? nextTryColor() : game.turn);
@@ -257,7 +259,8 @@ function syncBoard(animateIndex = null) {
     const cell = cells[index];
     const value = board[index];
     const occupied = value !== EMPTY;
-    const trial = Boolean(trialIndices?.has(index));
+    const trialNumber = trialNumbers?.get(index) ?? null;
+    const trial = trialNumber !== null;
     const expectedColor = occupied ? String(value) : null;
     let stone = cell.firstElementChild;
 
@@ -272,6 +275,11 @@ function syncBoard(animateIndex = null) {
         stone = stoneMarkup(value);
         if (trial) stone.classList.add('try-stone');
         cell.append(stone);
+      }
+      if (trial) {
+        stone.dataset.tryNumber = String(trialNumber);
+        stone.classList.toggle('is-multi', trialNumber >= 10);
+        stone.classList.toggle('is-triple', trialNumber >= 100);
       }
       stone.classList.toggle('last', !trial && game.lastMove === index);
       stone.classList.toggle('just-moved', !trial && animateIndex === index);
