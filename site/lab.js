@@ -390,6 +390,117 @@ function remainingStats(board, size, starter) {
   return { empty, neutralBoth, doubleNew, blackOnlyNew, whiteOnlyNew, activeMerges, creations };
 }
 
+function isolatedNeutralPoints(board, size) {
+  const analysis = analyzeGroups(board, size);
+  const out = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    const row = Math.floor(index / size);
+    const col = index % size;
+    let emptyNeighbors = 0;
+    const blackGroups = new Set();
+    const whiteGroups = new Set();
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === EMPTY) emptyNeighbors += 1;
+      else if (board[next] === BLACK) blackGroups.add(analysis.groupIndex[next]);
+      else whiteGroups.add(analysis.groupIndex[next]);
+    }
+    if (emptyNeighbors === 0 && blackGroups.size === 1 && whiteGroups.size === 1) out.push(index);
+  }
+  return out;
+}
+
+function solveStructured(board, starter, size, komi, timeLimit = 5000) {
+  const work = board.slice();
+  const isolated = isolatedNeutralPoints(board, size);
+  const isolatedSet = new Set(isolated);
+  const residual = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] === EMPTY && !isolatedSet.has(index)) residual.push(index);
+  }
+  const started = performance.now();
+  const tt = new Map();
+  let nodes = 0;
+  let timedOut = false;
+  let bestMove = -2;
+  const terminal = () => {
+    const analysis = analyzeGroups(work, size);
+    const result = judgeScores({ black: analysis.black, white: analysis.white }, komi);
+    return result.adjustedScores.black - result.adjustedScores.white;
+  };
+  const order = (player) => {
+    const analysis = analyzeGroups(work, size);
+    const out = [];
+    for (const index of residual) {
+      if (work[index] !== EMPTY) continue;
+      const row = Math.floor(index / size);
+      const col = index % size;
+      const groups = new Set();
+      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        const next = nr * size + nc;
+        if (work[next] === player) groups.add(analysis.groupIndex[next]);
+      }
+      out.push([index, groups.size]);
+    }
+    return out.sort((a, b) => b[1] - a[1]);
+  };
+  function search(player, remaining, passes, alpha, beta, depth) {
+    nodes += 1;
+    if ((nodes & 2047) === 0 && performance.now() - started > timeLimit) {
+      timedOut = true;
+      return 0;
+    }
+    if (!remaining.length) return terminal();
+    const key = work.join('') + '|' + remaining.join(',') + '|' + player + '|' + passes;
+    const cached = tt.get(key);
+    if (cached !== undefined) return cached;
+    const ordered = order(player);
+    let best = player === WHITE ? -Infinity : Infinity;
+    for (const [index] of ordered) {
+      work[index] = player;
+      const rest = remaining.filter((value) => value !== index);
+      const value = search(player === BLACK ? WHITE : BLACK, rest, passes, alpha, beta, depth + 1);
+      work[index] = EMPTY;
+      if (timedOut) return best;
+      if (player === WHITE) {
+        if (value > best) { best = value; if (depth === 0) bestMove = index; }
+        if (best > alpha) alpha = best;
+      } else {
+        if (value < best) { best = value; if (depth === 0) bestMove = index; }
+        if (best < beta) beta = best;
+      }
+      if (alpha >= beta) break;
+    }
+    if (!timedOut && passes > 0) {
+      const value = search(player === BLACK ? WHITE : BLACK, remaining, passes - 1, alpha, beta, depth + 1);
+      if (!timedOut) {
+        if (player === WHITE) { if (value > best) { best = value; if (depth === 0) bestMove = -1; } }
+        else if (value < best) { best = value; if (depth === 0) bestMove = -1; }
+      }
+    }
+    if (!timedOut) tt.set(key, best);
+    return best;
+  }
+  const whiteAdvantage = search(starter, residual, isolated.length, -Infinity, Infinity, 0);
+  return {
+    solved: !timedOut,
+    whiteAdvantage,
+    bestMove,
+    nodes,
+    ms: performance.now() - started,
+    ttSize: tt.size,
+    passes: isolated.length,
+    residual: residual.length,
+  };
+}
+
 function solveExact(board, starter, size, timeLimit = EXACT_TIME_LIMIT) {
   const work = board.slice();
   const started = performance.now();
@@ -588,14 +699,20 @@ function showExactSolve(result) {
   dom.verdict.children[1].textContent = `${lead === 0 ? '同数白胜' : `${label}方最优结果领先 ${formatNumber(lead)} 间`}；这是双方最优下的终局结果。`;
   dom.winbar.hidden = true;
   dom.candidates.replaceChildren();
-  if (result.bestMove >= 0) {
+  if (result.bestMove === -1) {
+    const item = makeElement('div', 'lab-candidate');
+    item.append(makeElement('b', '', 'PASS'));
+    item.append(makeElement('span', '', `${result.passes} 个孤立中性单关`));
+    item.append(makeElement('strong', '', 'EXACT'));
+    dom.candidates.append(item);
+  } else if (result.bestMove >= 0) {
     const item = makeElement('div', 'lab-candidate');
     item.append(makeElement('b', '', coordinateLabel(result.bestMove, source.size)));
     item.append(makeElement('span', '', '精确最优落点'));
     item.append(makeElement('strong', '', 'EXACT'));
     dom.candidates.append(item);
   }
-  dom.meta.textContent = `精确搜索 ${result.nodes.toLocaleString()} 节点 · ${Math.round(result.ms)} ms · ${result.ttSize.toLocaleString()} 个缓存局面`;
+  dom.meta.textContent = `结构精确搜索 ${result.nodes.toLocaleString()} 节点 · ${Math.round(result.ms)} ms · 残局 ${result.residual} 点 + ${result.passes} 个孤立中性 Pass · ${result.ttSize.toLocaleString()} 个缓存`;
 }
 
 function showEstimate(estimateResult, note = '') {
@@ -650,20 +767,14 @@ async function runAnalysis({ judgeOnly = false } = {}) {
   }
   await new Promise((resolve) => window.setTimeout(resolve, 20));
   try {
-    if (emptyCount <= EXACT_EMPTY_LIMIT) {
-      dom.verdict.replaceChildren(makeElement('p', '', '正在精确求解终局，可能需要几秒…'));
-      await new Promise((resolve) => window.setTimeout(resolve, 20));
-      const exact = solveExact(position, turn, source.size);
-      if (exact.solved) {
-        showExactSolve(exact);
-        return;
-      }
-      note = `精确搜索在 ${formatNumber(EXACT_TIME_LIMIT / 1000)} 秒内未完成。`;
-    } else {
-      note = stats.activeMerges === 0 && emptyCount <= 50
-        ? `官子阶段：${emptyCount} 个空点，${stats.neutralBoth} 个双方中性单关；暂无合并点。`
-        : `${emptyCount} 个空点：${stats.neutralBoth} 中性、${stats.doubleNew} 双方各加一、${stats.blackOnlyNew + stats.whiteOnlyNew} 单方新块、${stats.activeMerges} 有效合并点；超出实时精确求解范围。`;
+    dom.verdict.replaceChildren(makeElement('p', '', '正在做结构精确搜索…'));
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+    const exact = solveStructured(position, turn, source.size, source.komi, 5000);
+    if (exact.solved) {
+      showExactSolve(exact);
+      return;
     }
+    note = `${emptyCount} 个空点：${stats.neutralBoth} 中性、${stats.doubleNew} 双方各加一、${stats.blackOnlyNew + stats.whiteOnlyNew} 单方新块、${stats.activeMerges} 有效合并点；结构搜索在 5 秒内未完成，下面只是启发式估计。`;
     dom.verdict.replaceChildren(makeElement('p', '', '精确搜索未完成，继续跑启发式模拟…'));
     await new Promise((resolve) => window.setTimeout(resolve, 20));
     const result = estimate();
