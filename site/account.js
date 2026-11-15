@@ -6,7 +6,7 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.6.0';
+} from './auth-client.js?v=1.7.0';
 import {
   BLACK,
   WHITE,
@@ -17,7 +17,7 @@ import {
   komiRuleText,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.6.0';
+} from './game.js?v=1.7.0';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -54,6 +54,7 @@ const dom = {
   recordTitle: $('#recordTitle'),
   recordSummary: $('#recordSummary'),
   recordScores: $('#recordScores'),
+  recordCopy: $('#recordCopy'),
   recordMoves: $('#recordMoves'),
   toast: $('#toast'),
 };
@@ -63,6 +64,7 @@ let currentUser = null;
 let savedGames = [];
 let toastTimer = null;
 let recordOpener = null;
+let lastRecordOrder = '';
 const returnTo = safeReturnTo(new URLSearchParams(location.search).get('return'));
 
 function safeReturnTo(raw) {
@@ -298,12 +300,17 @@ async function openRecord(game) {
       dom.recordMoves.append(makeElement('li', 'record-empty', '还没有落子。'));
       return;
     }
+    const orderLines = [];
     for (const move of state.history) {
+      const number = String(move.moveNumber ?? orderLines.length + 1).padStart(2, '0');
+      const text = `${colorName(move.color)} ${coordinateLabel(move.index, state.size)}`;
+      orderLines.push(`${number}. ${text}`);
       const item = makeElement('li', move.color === WHITE ? 'is-white' : '');
-      item.append(makeElement('strong', '', String(move.moveNumber ?? '').padStart(2, '0')));
-      item.append(makeElement('em', '', `${colorName(move.color)} ${coordinateLabel(move.index, state.size)}`));
+      item.append(makeElement('strong', '', number));
+      item.append(makeElement('em', '', text));
       dom.recordMoves.append(item);
     }
+    lastRecordOrder = orderLines.join('\n');
   } catch (error) {
     dom.recordSummary.textContent = error.message || '棋谱读取失败';
   }
@@ -381,6 +388,15 @@ function bindEvents() {
   dom.logoutBtn.addEventListener('click', handleLogout);
   dom.refreshLibrary.addEventListener('click', loadLibrary);
   dom.recordClose.addEventListener('click', closeRecord);
+  dom.recordCopy.addEventListener('click', async () => {
+    if (!lastRecordOrder) return;
+    try {
+      await navigator.clipboard.writeText(lastRecordOrder);
+      showToast('棋谱已复制');
+    } catch {
+      showToast('复制失败，请手动选择棋谱');
+    }
+  });
   dom.recordModal.addEventListener('click', (event) => {
     if (event.target.closest('[data-record-close]')) closeRecord();
   });

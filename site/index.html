@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.6.0">
+  <link rel="stylesheet" href="./styles.css?v=1.7.0">
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true" width="0" height="0">
@@ -40,6 +40,10 @@
     </symbol>
     <symbol id="icon-expand" viewBox="0 0 24 24">
       <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24">
+      <path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
     </symbol>
     <symbol id="icon-close" viewBox="0 0 24 24">
       <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
@@ -194,12 +198,23 @@
           <button type="button" class="btn btn-soft" id="resignBtn" title="当前行棋方认输">
             <svg class="icon" aria-hidden="true"><use href="#icon-flag"></use></svg>认输
           </button>
-          <button type="button" class="btn btn-soft action-wide" id="settleBtn" title="按当前孤棋数立即结算">
-            <svg class="icon" aria-hidden="true"><use href="#icon-settle"></use></svg>立即结算<span class="btn-inline-hint">按当前间数</span>
+          <button type="button" class="btn btn-soft" id="tryBtn" title="试放一子，预览间数后再决定是否落子">
+            <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><span id="tryBtnText">试下</span>
+          </button>
+          <button type="button" class="btn btn-soft" id="settleBtn" title="按当前孤棋数立即结算">
+            <svg class="icon" aria-hidden="true"><use href="#icon-settle"></use></svg>立即结算
           </button>
           <button type="button" class="btn btn-soft action-wide cloud-save" id="saveBtn" title="保存当前对局到账户" hidden>
             <svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg>保存对局<span class="btn-inline-hint" id="saveBtnHint">云端存档</span>
           </button>
+        </div>
+
+        <div class="try-preview-box" id="tryPreviewBox" hidden>
+          <p id="tryPreviewText">点击棋盘空格，试放一子预览间数。</p>
+          <div class="try-preview-actions">
+            <button type="button" class="btn btn-primary" id="tryConfirmBtn">确认落子</button>
+            <button type="button" class="btn btn-soft" id="tryCancelBtn">取消</button>
+          </div>
         </div>
 
         <p class="console-label">设置</p>
@@ -307,6 +322,6 @@
     </section>
   </div>
 
-  <script type="module" src="./app.js?v=1.6.0"></script>
+  <script type="module" src="./app.js?v=1.7.0"></script>
 </body>
 </html>

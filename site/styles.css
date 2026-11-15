@@ -2509,3 +2509,71 @@ body.board-immersive .immersive-exit {
     padding: 0 18px 17px;
   }
 }
+
+/* Trial move preview */
+
+.try-preview-box {
+  margin-top: 9px;
+  padding: 11px 12px;
+  border: 1px dashed rgba(173, 70, 52, 0.35);
+  border-radius: 10px;
+  background: rgba(173, 70, 52, 0.045);
+}
+
+.try-preview-box p {
+  margin: 0;
+  color: var(--graphite);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.try-preview-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.try-preview-actions .btn {
+  min-height: 34px;
+  font-size: 9px;
+}
+
+.try-preview-actions .btn:disabled {
+  opacity: 0.4;
+}
+
+.stone.try-stone {
+  opacity: 0.58;
+  filter: saturate(0.72);
+  box-shadow:
+    0 0 0 1px rgba(255, 253, 247, 0.7),
+    0 2px 5px rgba(23, 22, 20, 0.14);
+}
+
+.board.is-playing .cell.try-preview::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.score-panel.is-preview {
+  box-shadow: inset 0 0 0 1px rgba(173, 70, 52, 0.2);
+}
+
+.phase-badge[data-phase="try"] {
+  border-color: rgba(173, 70, 52, 0.28);
+  background: rgba(173, 70, 52, 0.08);
+  color: var(--accent);
+}
+
+.sidebar.console .try-preview-box {
+  margin-top: 7px;
+}
+
+
+.btn.is-active {
+  border-color: rgba(173, 70, 52, 0.38);
+  background: rgba(173, 70, 52, 0.075);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(173, 70, 52, 0.1);
+}

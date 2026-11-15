@@ -25,13 +25,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.6.0';
+} from './game.js?v=1.7.0';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.6.0';
+} from './auth-client.js?v=1.7.0';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -74,6 +74,12 @@ const dom = {
   undoBtn: document.querySelector('#undoBtn'),
   resignBtn: document.querySelector('#resignBtn'),
   settleBtn: document.querySelector('#settleBtn'),
+  tryBtn: document.querySelector('#tryBtn'),
+  tryBtnText: document.querySelector('#tryBtnText'),
+  tryPreviewBox: document.querySelector('#tryPreviewBox'),
+  tryPreviewText: document.querySelector('#tryPreviewText'),
+  tryConfirmBtn: document.querySelector('#tryConfirmBtn'),
+  tryCancelBtn: document.querySelector('#tryCancelBtn'),
   accountLink: document.querySelector('#accountLink'),
   boardFullscreenBtn: document.querySelector('#boardFullscreenBtn'),
   immersiveExit: document.querySelector('#immersiveExit'),
@@ -111,6 +117,8 @@ let pendingCloseTimer = null;
 let accountUser = null;
 let savingCloud = false;
 let boardImmersive = false;
+let tryMode = false;
+let tryPreviewIndex = null;
 
 const phaseNames = {
   ready: '布局阶段',
@@ -232,21 +240,24 @@ function syncBoard(animateIndex = null) {
     const cell = cells[index];
     const value = game.board[index];
     const occupied = value !== EMPTY;
-    const expectedColor = occupied ? String(value) : null;
+    const preview = tryMode && tryPreviewIndex === index && value === EMPTY;
+    const expectedColor = occupied ? String(value) : preview ? String(game.turn) : null;
     let stone = cell.firstElementChild;
 
     cell.classList.toggle('occupied', occupied);
     cell.classList.toggle('is-black', value === BLACK);
     cell.classList.toggle('is-white', value === WHITE);
+    cell.classList.toggle('try-preview', preview);
 
-    if (occupied) {
-      if (!stone || stone.dataset.color !== expectedColor) {
+    if (occupied || preview) {
+      if (!stone || stone.dataset.color !== expectedColor || stone.classList.contains('try-stone') !== preview) {
         stone?.remove();
-        stone = stoneMarkup(value);
+        stone = stoneMarkup(preview ? game.turn : value);
+        if (preview) stone.classList.add('try-stone');
         cell.append(stone);
       }
-      stone.classList.toggle('last', game.lastMove === index);
-      stone.classList.toggle('just-moved', animateIndex === index);
+      stone.classList.toggle('last', !preview && game.lastMove === index);
+      stone.classList.toggle('just-moved', !preview && animateIndex === index);
     } else if (stone) {
       stone.remove();
     }
@@ -256,6 +267,8 @@ function syncBoard(animateIndex = null) {
       cell.setAttribute('aria-label', `${coordinate}，黑棋`);
     } else if (value === WHITE) {
       cell.setAttribute('aria-label', `${coordinate}，白棋`);
+    } else if (preview) {
+      cell.setAttribute('aria-label', `${coordinate}，试下预览${colorName(game.turn)}`);
     } else {
       cell.setAttribute('aria-label', `${coordinate}，空位${isPlaying ? '，可落子' : ''}`);
     }
@@ -270,8 +283,16 @@ function bumpMetric(element) {
   element.classList.add('metric-bump');
 }
 
+function previewBoard() {
+  if (!tryMode || tryPreviewIndex === null) return game.board;
+  const board = game.board.slice();
+  board[tryPreviewIndex] = game.turn;
+  return board;
+}
+
 function renderStats({ animate = false } = {}) {
-  const counts = analyzeGroups(game.board, game.size);
+  const counts = analyzeGroups(previewBoard(), game.size);
+  dom.scorePanel.classList.toggle('is-preview', tryMode);
   const blackDisplay = countVisible ? String(counts.black) : '—';
   const whiteDisplay = countVisible ? String(counts.white) : '—';
 
@@ -308,7 +329,10 @@ function renderStats({ animate = false } = {}) {
 
   const hiddenNote = countVisible ? '' : ' · 孤棋数已隐藏';
   const matchNote = `第 ${activeNumber()} 场`;
-  if (game.phase === 'ready') {
+  if (tryMode) {
+    const previewNote = tryPreviewIndex === null ? '点击空格试放' : `试放 ${coordinateLabel(tryPreviewIndex, game.size)}`;
+    dom.scoreFoot.textContent = `${matchNote} · 试下预览 · ${previewNote}${hiddenNote}`;
+  } else if (game.phase === 'ready') {
     const preset = PRESET_COUNT[game.size];
     dom.scoreFoot.textContent = `${matchNote} · 预设黑 ${preset} 子 / 白 ${preset} 子${hiddenNote}`;
   } else if (game.phase === 'playing') {
@@ -341,7 +365,18 @@ function renderStatus() {
     dom.statusSub.textContent = `${komiRuleText(game.komi)} · 请检查预设布局，准备好后开始对局。`;
   }
 
-  if (phase === 'ready') {
+  if (tryMode) {
+    dom.phaseBadge.dataset.phase = 'try';
+    dom.phaseText.textContent = '试下';
+    dom.statusTitle.textContent = tryPreviewIndex === null ? '试下：选择落点' : '试下预览';
+    dom.statusSub.textContent = tryPreviewIndex === null
+      ? '点击棋盘空格试放一子；确认后才会正式落子。'
+      : `预览 ${colorName(game.turn)} 落在 ${coordinateLabel(tryPreviewIndex, game.size)} 后的间数。`;
+  }
+
+  if (tryMode) {
+    dom.lastMoveText.textContent = '试下预览 · 尚未落子';
+  } else if (phase === 'ready') {
     dom.lastMoveText.textContent = '等待开始对局';
   } else if (phase === 'ended') {
     dom.lastMoveText.textContent = `对局结束 · 共 ${game.history.length} 手`;
@@ -361,21 +396,32 @@ function renderControls() {
   const isReady = game.phase === 'ready';
   const isPlaying = game.phase === 'playing';
   const atLimit = matches.length >= MAX_MATCHES;
+  const locked = tryMode;
 
   dom.startBtn.disabled = !isReady;
   dom.mobileStartBtn.disabled = !isReady;
   dom.mobileStartWrap.hidden = !isReady;
-  dom.undoBtn.disabled = game.history.length === 0;
-  dom.resignBtn.disabled = !isPlaying;
-  dom.settleBtn.disabled = !isPlaying;
+  dom.undoBtn.disabled = game.history.length === 0 || locked;
+  dom.resignBtn.disabled = !isPlaying || locked;
+  dom.settleBtn.disabled = !isPlaying || locked;
+  dom.tryBtn.disabled = !isPlaying;
+  dom.tryBtn.setAttribute('aria-pressed', String(tryMode));
+  dom.tryBtn.classList.toggle('is-active', tryMode);
+  dom.tryBtnText.textContent = tryMode ? '试下中' : '试下';
+  dom.tryPreviewBox.hidden = !tryMode;
+  dom.tryPreviewText.textContent = tryPreviewIndex === null
+    ? '点击棋盘空格，试放一子预览间数。'
+    : `预览 ${colorName(game.turn)} ${coordinateLabel(tryPreviewIndex, game.size)}，确认后才会正式落子。`;
+  dom.tryConfirmBtn.disabled = tryPreviewIndex === null;
+  dom.tryCancelBtn.disabled = !tryMode;
   dom.saveBtn.hidden = !accountUser;
-  dom.saveBtn.disabled = savingCloud;
+  dom.saveBtn.disabled = savingCloud || locked;
   if (dom.saveBtnHint) dom.saveBtnHint.textContent = game.cloudId ? '更新存档' : '云端存档';
-  dom.newGameBtn.disabled = atLimit;
+  dom.newGameBtn.disabled = atLimit || locked;
   dom.newGameBtn.title = atLimit
     ? `最多同时保留 ${MAX_MATCHES} 场对局`
     : '保留当前对局，并开启一场新的对局';
-  dom.newMatchBtn.disabled = atLimit;
+  dom.newMatchBtn.disabled = atLimit || locked;
   dom.newMatchBtn.title = atLimit
     ? `已达 ${MAX_MATCHES} 场上限，请先关闭一场`
     : '开启新对局';
@@ -392,9 +438,11 @@ function renderControls() {
   }
 
   for (const button of dom.sizeButtons) {
+    button.disabled = locked;
     button.setAttribute('aria-pressed', String(Number(button.dataset.size) === game.size));
   }
   for (const button of dom.komiButtons) {
+    button.disabled = locked;
     button.setAttribute('aria-pressed', String(Number(button.dataset.komi) === game.komi));
   }
 }
@@ -622,6 +670,8 @@ function switchMatch(id, { focusTab = false, announce = true } = {}) {
   clearResultTimer();
   closeResult({ restoreFocus: false });
   resetPendingClose();
+  tryMode = false;
+  tryPreviewIndex = null;
   activeMatchId = target.id;
   game = target;
   previousCounts = null;
@@ -632,6 +682,8 @@ function switchMatch(id, { focusTab = false, announce = true } = {}) {
 }
 
 function handleNewGame() {
+  tryMode = false;
+  tryPreviewIndex = null;
   if (matches.length >= MAX_MATCHES) {
     showToast(`最多同时保留 ${MAX_MATCHES} 场对局，请先关闭一场`);
     return;
@@ -658,6 +710,8 @@ function handleNewGame() {
 }
 
 function handleRegenerate() {
+  tryMode = false;
+  tryPreviewIndex = null;
   const previousSignature = game.board.join('');
   const next = makeSession({
     size: game.size,
@@ -675,6 +729,8 @@ function handleRegenerate() {
 }
 
 function handleStart() {
+  tryMode = false;
+  tryPreviewIndex = null;
   if (game.phase !== 'ready') return;
   commitActive(startGame(game));
   renderAll();
@@ -683,6 +739,8 @@ function handleStart() {
 }
 
 function handleUndo() {
+  tryMode = false;
+  tryPreviewIndex = null;
   if (game.history.length === 0) return;
   clearResultTimer();
   closeResult({ restoreFocus: false });
@@ -692,6 +750,8 @@ function handleUndo() {
 }
 
 function handleResign() {
+  tryMode = false;
+  tryPreviewIndex = null;
   if (game.phase !== 'playing') return;
   commitActive(resignGame(game));
   renderAll({ animateCounts: true });
@@ -699,10 +759,38 @@ function handleResign() {
 }
 
 function handleSettle() {
+  tryMode = false;
+  tryPreviewIndex = null;
   if (game.phase !== 'playing') return;
   commitActive(settleGame(game));
   renderAll({ animateCounts: true });
   openResult();
+}
+
+function setTryMode(enabled) {
+  if (!enabled) {
+    tryMode = false;
+    tryPreviewIndex = null;
+    renderAll();
+    return;
+  }
+  if (game.phase !== 'playing' || tryMode) return;
+  tryMode = true;
+  tryPreviewIndex = null;
+  renderAll();
+  showToast('试下模式：点击空格预览，确认后才落子');
+}
+
+function confirmTryMove() {
+  if (!tryMode || tryPreviewIndex === null) {
+    showToast('请先点击一个空格试下');
+    return;
+  }
+  const index = tryPreviewIndex;
+  tryMode = false;
+  tryPreviewIndex = null;
+  handleCell(index);
+  showToast('已确认落子');
 }
 
 function setBoardImmersive(enabled) {
@@ -780,6 +868,8 @@ async function restoreCloudSave() {
     const loaded = normalizeSavedState(saved.state);
     const initial = matches[0];
     if (!initial) return;
+    tryMode = false;
+    tryPreviewIndex = null;
     const hydrated = { ...loaded, id: initial.id, cloudId: saved.id };
     matches[0] = hydrated;
     activeMatchId = hydrated.id;
@@ -816,6 +906,12 @@ function handleCell(index) {
   if (game.phase !== 'playing') return;
   if (!Number.isInteger(index) || game.board[index] !== EMPTY) return;
 
+  if (tryMode) {
+    tryPreviewIndex = tryPreviewIndex === index ? null : index;
+    renderAll();
+    return;
+  }
+
   const next = placeStone(game, index);
   if (next === game) return;
 
@@ -825,6 +921,8 @@ function handleCell(index) {
 }
 
 function handleSizeChange(size) {
+  tryMode = false;
+  tryPreviewIndex = null;
   if (!BOARD_SIZES.includes(size) || size === game.size) return;
   clearResultTimer();
   closeResult({ restoreFocus: false });
@@ -851,6 +949,8 @@ function handleKomiChange(komi) {
 }
 
 function closeMatch(matchId) {
+  tryMode = false;
+  tryPreviewIndex = null;
   const index = matches.findIndex((match) => match.id === matchId);
   if (index === -1) return;
 
@@ -1028,6 +1128,9 @@ dom.regenerateBtn.addEventListener('click', handleRegenerate);
 dom.undoBtn.addEventListener('click', handleUndo);
 dom.resignBtn.addEventListener('click', handleResign);
 dom.settleBtn.addEventListener('click', handleSettle);
+dom.tryBtn.addEventListener('click', () => setTryMode(!tryMode));
+dom.tryConfirmBtn.addEventListener('click', confirmTryMove);
+dom.tryCancelBtn.addEventListener('click', () => setTryMode(false));
 dom.saveBtn.addEventListener('click', handleSaveCloud);
 dom.boardFullscreenBtn.addEventListener('click', () => setBoardImmersive(!boardImmersive));
 dom.immersiveExit.addEventListener('click', () => setBoardImmersive(false));
@@ -1076,6 +1179,8 @@ Object.defineProperty(window, '__guqi', {
         matchLimit: MAX_MATCHES,
         activeIndex: activeIndex(),
         cloudId: game.cloudId ?? null,
+        tryMode,
+        tryPreviewIndex,
         size: game.size,
         komi: game.komi,
         phase: game.phase,
