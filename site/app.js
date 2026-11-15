@@ -25,13 +25,13 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.1';
+} from './game.js?v=1.9.2';
 import {
   accountUrl,
   getSavedGame,
   initAccountLink,
   saveLocalGame,
-} from './auth-client.js?v=1.9.1';
+} from './auth-client.js?v=1.9.2';
 
 const STAR_POINTS = {
   13: new Set(['3,3', '3,9', '6,6', '9,3', '9,9']),
@@ -663,6 +663,7 @@ function openResult() {
   document.body.classList.add('modal-open');
   setBackgroundInert(true);
   dom.resultCard.focus({ preventScroll: true });
+  void handleSaveCloud({ auto: true });
 }
 
 function scheduleResult() {
@@ -829,11 +830,13 @@ function setBoardImmersive(enabled) {
   }
 }
 
-async function handleSaveCloud() {
+async function handleSaveCloud(options = {}) {
+  const auto = Boolean(options.auto);
   if (!accountUser) {
-    location.assign(accountUrl(location.pathname + location.search));
+    if (!auto) location.assign(accountUrl(location.pathname + location.search));
     return;
   }
+  if (auto && (game.phase !== 'ended' || !game.result || game.autoSaved)) return;
   if (savingCloud) return;
   savingCloud = true;
   renderControls();
@@ -844,12 +847,19 @@ async function handleSaveCloud() {
   try {
     const saved = await saveLocalGame(game, { id: game.cloudId || '', title });
     game.cloudId = saved.id;
-    showToast('已保存到云端');
+    if (auto) {
+      game.autoSaved = true;
+      showToast('终局已自动保存到云端');
+    } else {
+      showToast('已保存到云端');
+    }
   } catch (error) {
     if (error.status === 401) {
       accountUser = null;
       dom.accountLink.textContent = '登录';
       showToast('登录已过期，请重新登录');
+    } else if (auto) {
+      showToast('终局自动保存失败，可手动保存');
     } else {
       showToast(error.message || '保存失败');
     }
