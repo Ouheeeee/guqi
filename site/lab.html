@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#efede6">
+  <meta name="description" content="孤棋实验室：导入棋谱，估算胜率与候选落点。">
+  <title>实验室 · 孤棋</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=lab1">
+  <link rel="stylesheet" href="./lab.css?v=lab1">
+</head>
+<body class="lab-body">
+  <a class="skip-link" href="#labMain">跳到实验内容</a>
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="回到孤棋首页">
+      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+        <rect x="1" y="1" width="42" height="42" rx="13" fill="#171614"/>
+        <circle cx="15.5" cy="15.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="28.5" cy="28.5" r="5.3" fill="#f8f6ef"/>
+        <circle cx="15.5" cy="28.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="28.5" cy="15.5" r="5.3" fill="#171614" stroke="#f8f6ef" stroke-width="1.4"/>
+        <circle cx="22" cy="22" r="1.3" fill="#f8f6ef" opacity=".55"/>
+      </svg>
+      <div class="brand-copy">
+        <span class="brand-cn">孤棋</span>
+        <span class="brand-en">GU QI · LAB</span>
+      </div>
+    </a>
+    <div class="topbar-right">
+      <span class="topbar-chip"><span class="chip-dot" aria-hidden="true"></span>实验版</span>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <a class="topbar-link" href="./index.html">同屏对战 <span aria-hidden="true">↗</span></a>
+      <span class="topbar-divider" aria-hidden="true"></span>
+      <a class="topbar-link" href="./account.html">账户</a>
+    </div>
+  </header>
+
+  <main class="lab-main" id="labMain">
+    <section class="panel lab-board-card" aria-label="实验棋盘">
+      <div class="lab-head">
+        <div>
+          <p class="eyebrow"><span>LABORATORY</span><span class="eyebrow-rule" aria-hidden="true"></span><span id="labSource">体验局面</span></p>
+          <h1>局面实验室</h1>
+          <p class="lab-lead">导入导出的棋谱，逐手回看，估算胜负和候选落点。</p>
+        </div>
+        <div class="lab-import">
+          <label class="btn btn-soft lab-file" for="recordFile">导入棋谱 JSON</label>
+          <input id="recordFile" type="file" accept=".json,application/json" hidden>
+          <select id="gameSelect" class="lab-select" hidden aria-label="选择棋谱"></select>
+        </div>
+      </div>
+
+      <div class="board-shell lab-shell">
+        <div class="coords coords-top" id="labCoordTop" aria-hidden="true"></div>
+        <div class="coords coords-left" id="labCoordLeft" aria-hidden="true"></div>
+        <div id="labBoard" class="board lab-board" role="img" aria-label="实验棋盘"></div>
+      </div>
+
+      <div class="lab-step">
+        <button type="button" class="replay-btn" id="labPrev" aria-label="上一手">‹</button>
+        <input type="range" class="replay-slider" id="labSlider" min="0" max="0" value="0" step="1" aria-label="棋谱手数" />
+        <button type="button" class="replay-btn" id="labNext" aria-label="下一手">›</button>
+        <span id="labStepLabel">第 0 / 0 手</span>
+      </div>
+    </section>
+
+    <aside class="lab-side">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>当前局面</h2>
+          <span class="panel-kicker">POSITION</span>
+        </div>
+        <div class="lab-stats">
+          <div class="lab-stat"><span>黑</span><strong id="labBlack">0</strong><em>间</em></div>
+          <div class="lab-stat"><span>白</span><strong id="labWhite">0</strong><em>间</em></div>
+          <div class="lab-stat"><span>轮次</span><strong id="labTurn">黑</strong></div>
+          <div class="lab-stat"><span>空点</span><strong id="labEmpty">0</strong></div>
+        </div>
+        <p class="lab-rule" id="labRule">黑方加贴 0.5 间后，间数少者胜。</p>
+        <p class="lab-phase" id="labPhase">体验局面</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>AI 判断</h2>
+          <span class="panel-kicker">ESTIMATE</span>
+        </div>
+        <div class="lab-actions">
+          <button type="button" class="btn btn-primary" id="labJudge">自动判定</button>
+          <button type="button" class="btn btn-soft" id="labAnalyze">胜率 + 候选点</button>
+        </div>
+        <div class="lab-verdict" id="labVerdict">
+          <p>导入棋谱后，先点「自动判定」。</p>
+        </div>
+        <div class="lab-winbar" id="labWinbar" hidden>
+          <span class="lab-winbar-black" id="labWinBlack"></span>
+          <span class="lab-winbar-white" id="labWinWhite"></span>
+        </div>
+        <div class="lab-candidates" id="labCandidates"></div>
+        <p class="lab-meta" id="labMeta"></p>
+        <p class="lab-caveat">实验性启发式估算，不是精确解，也不是 AlphaGo；联机结算仍由双方确认。</p>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <span>孤棋 · 实验室</span>
+    <span>导入单盘 JSON 即可分析</span>
+  </footer>
+
+  <script type="module" src="./lab.js?v=lab1"></script>
+</body>
+</html>

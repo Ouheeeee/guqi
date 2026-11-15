@@ -1,0 +1,466 @@
+import {
+  BLACK,
+  WHITE,
+  EMPTY,
+  analyzeGroups,
+  coordinateLabel,
+  colorName,
+  createGame,
+  formatNumber,
+  judgeScores,
+} from './game.js?v=1.9.2';
+
+const $ = (selector) => document.querySelector(selector);
+const dom = {
+  shell: $('.lab-shell'),
+  board: $('#labBoard'),
+  coordTop: $('#labCoordTop'),
+  coordLeft: $('#labCoordLeft'),
+  source: $('#labSource'),
+  file: $('#recordFile'),
+  select: $('#gameSelect'),
+  slider: $('#labSlider'),
+  stepLabel: $('#labStepLabel'),
+  prev: $('#labPrev'),
+  next: $('#labNext'),
+  black: $('#labBlack'),
+  white: $('#labWhite'),
+  turn: $('#labTurn'),
+  empty: $('#labEmpty'),
+  rule: $('#labRule'),
+  phase: $('#labPhase'),
+  judge: $('#labJudge'),
+  analyze: $('#labAnalyze'),
+  verdict: $('#labVerdict'),
+  winbar: $('#labWinbar'),
+  winBlack: $('#labWinBlack'),
+  winWhite: $('#labWinWhite'),
+  candidates: $('#labCandidates'),
+  meta: $('#labMeta'),
+};
+
+const ROLLOUTS_PER_CANDIDATE = 6;
+const MAX_ROOT_CANDIDATES = 60;
+
+let source = null;
+let loadedGames = [];
+let step = 0;
+let position = [];
+let turn = BLACK;
+let ended = false;
+let busy = false;
+
+function otherColor(color) {
+  return color === BLACK ? WHITE : BLACK;
+}
+
+function stoneMarkup(color) {
+  const stone = document.createElement('span');
+  stone.className = `stone stone-${color === BLACK ? 'black' : 'white'}`;
+  stone.dataset.color = String(color);
+  stone.setAttribute('aria-hidden', 'true');
+  return stone;
+}
+
+function buildBoard(size) {
+  dom.shell.style.setProperty('--n', String(size));
+  dom.board.style.setProperty('--n', String(size));
+  dom.coordTop.replaceChildren();
+  dom.coordLeft.replaceChildren();
+  for (let col = 0; col < size; col += 1) {
+    dom.coordTop.append(makeElement('span', '', String.fromCharCode(65 + col)));
+  }
+  for (let row = 0; row < size; row += 1) {
+    dom.coordLeft.append(makeElement('span', '', String(row + 1)));
+  }
+  const fragment = document.createDocumentFragment();
+  for (let index = 0; index < size * size; index += 1) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.index = String(index);
+    fragment.append(cell);
+  }
+  dom.board.replaceChildren(fragment);
+  dom.board.setAttribute('aria-label', `${size} 路实验棋盘`);
+}
+
+function makeElement(tag, className, text = '') {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text) element.textContent = text;
+  return element;
+}
+
+function renderBoard() {
+  if (!source) return;
+  const size = source.size;
+  const cells = dom.board.children;
+  if (cells.length !== size * size) buildBoard(size);
+  const lastMove = step > 0 ? source.history[step - 1] : null;
+  for (let index = 0; index < cells.length; index += 1) {
+    const cell = cells[index];
+    const value = position[index];
+    cell.replaceChildren();
+    cell.classList.toggle('occupied', value !== EMPTY);
+    cell.classList.toggle('is-black', value === BLACK);
+    cell.classList.toggle('is-white', value === WHITE);
+    cell.classList.remove('star');
+    if (value !== EMPTY) {
+      const stone = stoneMarkup(value);
+      if (lastMove && lastMove.index === index) stone.classList.add('last');
+      cell.append(stone);
+      cell.setAttribute('aria-label', `${coordinateLabel(index, size)}，${colorName(value)}`);
+    } else {
+      cell.setAttribute('aria-label', `${coordinateLabel(index, size)}，空位`);
+    }
+  }
+  dom.stepLabel.textContent = `第 ${step} / ${source.history.length} 手`;
+  dom.slider.max = String(source.history.length);
+  dom.slider.value = String(step);
+  dom.prev.disabled = step === 0;
+  dom.next.disabled = step === source.history.length;
+  dom.board.setAttribute('aria-label', `实验棋盘，第 ${step} 手，共 ${source.history.length} 手`);
+}
+
+function renderStats() {
+  if (!source) return;
+  const analysis = analyzeGroups(position, source.size);
+  const adjusted = { black: analysis.black + source.komi, white: analysis.white };
+  dom.black.textContent = String(analysis.black);
+  dom.white.textContent = String(analysis.white);
+  dom.turn.textContent = colorName(turn);
+  dom.empty.textContent = String(position.filter((value) => value === EMPTY).length);
+  dom.rule.textContent = `黑方加贴 ${formatNumber(source.komi)} 间后，间数少者胜；同数白胜。`;
+  dom.phase.textContent = ended
+    ? '终局 · 精确计分'
+    : `${source.title} · 第 ${step} 手 · 黑 ${adjusted.black} / 白 ${adjusted.white}`;
+}
+
+function setStep(nextStep) {
+  if (!source) return;
+  step = Math.max(0, Math.min(source.history.length, Number(nextStep) || 0));
+  position = source.start.slice();
+  for (let index = 0; index < step; index += 1) {
+    const move = source.history[index];
+    position[move.index] = move.color;
+  }
+  turn = step % 2 === 0 ? BLACK : WHITE;
+  ended = source.ended && step === source.history.length;
+  renderBoard();
+  renderStats();
+  clearOutput();
+  if (ended) showExact();
+}
+
+function clearOutput() {
+  dom.verdict.replaceChildren(makeElement('p', '', '点「自动判定」得到精确结果或 AI 估计。'));
+  dom.winbar.hidden = true;
+  dom.candidates.replaceChildren();
+  dom.meta.textContent = '';
+}
+
+function exactResult() {
+  const analysis = analyzeGroups(position, source.size);
+  return judgeScores({ black: analysis.black, white: analysis.white }, source.komi);
+}
+
+function resultText(result) {
+  const adjusted = result.adjustedScores;
+  const label = result.winner === BLACK ? '黑胜' : '白胜';
+  return `${label} · 黑 ${result.scores.black} + 贴 ${formatNumber(source.komi)} = ${formatNumber(adjusted.black)}，白 ${result.scores.white}`;
+}
+
+function showExact() {
+  if (!source) return;
+  const result = exactResult();
+  const isDraw = result.isTie;
+  dom.verdict.replaceChildren(
+    makeElement('p', '', ''),
+    makeElement('p', '', ''),
+  );
+  const first = dom.verdict.children[0];
+  first.innerHTML = `<strong class="is-exact">精确判定</strong> · ${result.winner === BLACK ? '黑胜' : '白胜'}${isDraw ? '（同数白胜）' : ''}`;
+  dom.verdict.children[1].textContent = resultText(result);
+  dom.winbar.hidden = true;
+  dom.candidates.replaceChildren();
+  dom.meta.textContent = '终局计分是精确的；没有可继续落子的空点。';
+}
+
+function adjacentOwnGroups(board, size, index, color, analysis) {
+  const row = Math.floor(index / size);
+  const col = index % size;
+  const groups = new Set();
+  for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    const nr = row + dr;
+    const nc = col + dc;
+    if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+    const next = nr * size + nc;
+    if (board[next] === color) groups.add(analysis.groupIndex[next]);
+  }
+  return groups;
+}
+
+function candidateLabel(delta, opponentDelta = 1) {
+  if (delta < 0) return `合并 ${1 - delta} 块`;
+  if (opponentDelta < 0) return `挡对方合并 ${1 - opponentDelta} 块`;
+  if (delta === 0) return '延伸';
+  return '新块';
+}
+
+function makeRootCandidates() {
+  const analysis = analyzeGroups(position, source.size);
+  const entries = [];
+  for (let index = 0; index < position.length; index += 1) {
+    if (position[index] !== EMPTY) continue;
+    const own = adjacentOwnGroups(position, source.size, index, turn, analysis);
+    const opponent = adjacentOwnGroups(position, source.size, index, otherColor(turn), analysis);
+    const delta = own.size === 0 ? 1 : 1 - own.size;
+    const opponentDelta = opponent.size === 0 ? 1 : 1 - opponent.size;
+    entries.push({ index, delta, opponentDelta, priority: delta + opponentDelta * 0.35 });
+  }
+  const sorted = entries.slice().sort((a, b) => a.priority - b.priority || a.index - b.index);
+  const selected = [];
+  const seen = new Set();
+  const add = (entry) => {
+    if (!entry || seen.has(entry.index)) return;
+    seen.add(entry.index);
+    selected.push(entry);
+  };
+  if (sorted.length <= MAX_ROOT_CANDIDATES) {
+    sorted.forEach(add);
+    return selected;
+  }
+  for (const entry of sorted) {
+    if (entry.delta >= 0 || selected.length >= 30) break;
+    add(entry);
+  }
+  for (const entry of sorted) {
+    if (entry.delta !== 0 || selected.length >= 44) break;
+    add(entry);
+  }
+  for (const entry of sorted) {
+    if (entry.opponentDelta >= 0) continue;
+    if (selected.length >= MAX_ROOT_CANDIDATES) break;
+    add(entry);
+  }
+  const rest = sorted.filter((entry) => entry.delta > 0 && entry.opponentDelta >= 0);
+  while (selected.length < MAX_ROOT_CANDIDATES && rest.length) {
+    add(rest.splice(Math.floor(Math.random() * rest.length), 1)[0]);
+  }
+  return selected;
+}
+
+function chooseRolloutMove(board, size, color) {
+  const analysis = analyzeGroups(board, size);
+  const empties = [];
+  let bestPriority = Infinity;
+  const best = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    empties.push(index);
+    const own = adjacentOwnGroups(board, size, index, color, analysis);
+    const opponent = adjacentOwnGroups(board, size, index, otherColor(color), analysis);
+    const delta = own.size === 0 ? 1 : 1 - own.size;
+    const opponentDelta = opponent.size === 0 ? 1 : 1 - opponent.size;
+    const priority = delta + opponentDelta * 0.35;
+    if (priority < bestPriority) {
+      bestPriority = priority;
+      best.length = 0;
+      best.push(index);
+    } else if (priority === bestPriority) {
+      best.push(index);
+    }
+  }
+  if (!empties.length) return -1;
+  if (Math.random() < 0.08) return empties[Math.floor(Math.random() * empties.length)];
+  return best[Math.floor(Math.random() * best.length)];
+}
+
+function simulateGame(board, starter, size) {
+  const copy = board.slice();
+  let player = starter;
+  let guard = size * size + 4;
+  while (guard-- > 0) {
+    const move = chooseRolloutMove(copy, size, player);
+    if (move < 0) break;
+    copy[move] = player;
+    player = otherColor(player);
+  }
+  const analysis = analyzeGroups(copy, size);
+  const result = judgeScores({ black: analysis.black, white: analysis.white }, source.komi);
+  const blackLead = result.adjustedScores.white - result.adjustedScores.black;
+  return { winner: result.winner, blackLead };
+}
+
+function estimate() {
+  const started = performance.now();
+  const candidates = makeRootCandidates();
+  const before = analyzeGroups(position, source.size);
+  const results = candidates.map((candidate) => {
+    const board = position.slice();
+    board[candidate.index] = turn;
+    let currentWins = 0;
+    let blackWins = 0;
+    let leadSum = 0;
+    const actual = [];
+    for (let index = 0; index < ROLLOUTS_PER_CANDIDATE; index += 1) {
+      const outcome = simulateGame(board, otherColor(turn), source.size);
+      actual.push(outcome);
+      if (outcome.winner === turn) currentWins += 1;
+      if (outcome.winner === BLACK) blackWins += 1;
+      leadSum += outcome.blackLead;
+    }
+    const currentRate = currentWins / ROLLOUTS_PER_CANDIDATE;
+    const blackRate = blackWins / ROLLOUTS_PER_CANDIDATE;
+    return {
+      ...candidate,
+      currentRate,
+      blackRate,
+      lead: leadSum / ROLLOUTS_PER_CANDIDATE,
+    };
+  });
+  results.sort((a, b) => b.currentRate - a.currentRate || b.lead - a.lead);
+  const total = results.length * ROLLOUTS_PER_CANDIDATE;
+  const blackRate = results.reduce((sum, item) => sum + item.blackRate, 0) / Math.max(1, results.length);
+  const lead = results.reduce((sum, item) => sum + item.lead, 0) / Math.max(1, results.length);
+  return { results: results.slice(0, 3), blackRate, lead, total, candidates: results.length, ms: performance.now() - started, before };
+}
+
+function showEstimate(estimateResult) {
+  const blackPct = Math.round(estimateResult.blackRate * 100);
+  const whitePct = 100 - blackPct;
+  const lead = estimateResult.lead;
+  const leadText = Math.abs(lead) < 0.05 ? '大致持平' : lead > 0 ? `黑平均领先 ${formatNumber(lead)} 间` : `白平均领先 ${formatNumber(-lead)} 间`;
+  dom.verdict.replaceChildren(
+    makeElement('p', '', ''),
+    makeElement('p', '', ''),
+  );
+  dom.verdict.children[0].innerHTML = `<strong class="is-estimate">AI 估计</strong> · 黑胜率 ${blackPct}% / 白胜率 ${whitePct}%`;
+  dom.verdict.children[1].textContent = `${leadText}；这是 ${estimateResult.total} 次启发式模拟的平均值，不是精确解。`;
+  dom.winbar.hidden = false;
+  dom.winBlack.style.width = `${blackPct}%`;
+  dom.winWhite.style.width = `${whitePct}%`;
+  dom.candidates.replaceChildren();
+  for (const [index, candidate] of estimateResult.results.entries()) {
+    const item = makeElement('div', 'lab-candidate');
+    item.append(makeElement('b', '', coordinateLabel(candidate.index, source.size)));
+    item.append(makeElement('span', '', `${candidateLabel(candidate.delta, candidate.opponentDelta)} · 当前方胜率 ${Math.round(candidate.currentRate * 100)}%`));
+    item.append(makeElement('strong', '', `#${index + 1}`));
+    dom.candidates.append(item);
+  }
+  dom.meta.textContent = `${estimateResult.candidates} 个候选 × ${ROLLOUTS_PER_CANDIDATE} 次 = ${estimateResult.total} 次模拟 · ${Math.round(estimateResult.ms)} ms · ${source.size} 路`;
+}
+
+async function runAnalysis({ judgeOnly = false } = {}) {
+  if (!source || busy) return;
+  if (ended) {
+    showExact();
+    return;
+  }
+  busy = true;
+  const originalJudge = dom.judge.textContent;
+  const originalAnalyze = dom.analyze.textContent;
+  dom.judge.disabled = true;
+  dom.analyze.disabled = true;
+  dom.judge.textContent = '计算中…';
+  dom.analyze.textContent = '计算中…';
+  dom.verdict.replaceChildren(makeElement('p', '', '正在模拟终局，可能需要一两秒…'));
+  await new Promise((resolve) => window.setTimeout(resolve, 30));
+  try {
+    const result = estimate();
+    if (judgeOnly) showEstimate(result);
+    else showEstimate(result);
+  } catch (error) {
+    dom.verdict.replaceChildren(makeElement('p', '', `分析失败：${error.message || error}`));
+  } finally {
+    busy = false;
+    dom.judge.disabled = false;
+    dom.analyze.disabled = false;
+    dom.judge.textContent = originalJudge;
+    dom.analyze.textContent = originalAnalyze;
+  }
+}
+
+function loadSource(nextSource) {
+  source = nextSource;
+  step = nextSource.history.length;
+  position = nextSource.start.slice();
+  dom.source.textContent = nextSource.title;
+  dom.slider.max = String(nextSource.history.length);
+  dom.slider.value = String(step);
+  buildBoard(nextSource.size);
+  setStep(step);
+  if (ended) showExact();
+}
+
+function startDemo() {
+  const demo = createGame(13, { komi: 0.5 });
+  demo.phase = 'playing';
+  demo.turn = BLACK;
+  loadSource({
+    title: '体验局面 · 13 路',
+    size: demo.size,
+    komi: demo.komi,
+    start: demo.board.slice(),
+    history: [],
+    ended: false,
+  });
+}
+
+function loadRecord(detail) {
+  if (!detail?.state) throw new Error('棋谱缺少 state');
+  const state = detail.state;
+  const size = Number(state.size);
+  const start = state.board.slice();
+  for (const move of state.history || []) start[move.index] = 0;
+  const endedNow = state.phase === 'ended' || (Array.isArray(state.board) && state.board.every((value) => value !== 0));
+  loadSource({
+    title: detail.title || `${size} 路棋谱`,
+    size,
+    komi: Number(state.komi),
+    start,
+    history: (state.history || []).slice(),
+    ended: endedNow,
+  });
+}
+
+async function importFile(file) {
+  const text = await file.text();
+  const data = JSON.parse(text);
+  const games = Array.isArray(data.games) ? data.games : data.game ? [data.game] : [];
+  if (!games.length) throw new Error('没有找到 games');
+  loadedGames = games;
+  dom.select.replaceChildren();
+  for (const [index, game] of games.entries()) {
+    const option = document.createElement('option');
+    option.value = String(index);
+    option.textContent = game.title || `棋谱 ${index + 1}`;
+    dom.select.append(option);
+  }
+  dom.select.hidden = games.length <= 1;
+  loadRecord(games[0]);
+}
+
+dom.file.addEventListener('change', async () => {
+  const file = dom.file.files?.[0];
+  if (!file) return;
+  try {
+    await importFile(file);
+  } catch (error) {
+    dom.source.textContent = '导入失败';
+    dom.verdict.replaceChildren(makeElement('p', '', error.message || '无法读取 JSON'));
+  }
+});
+
+dom.select.addEventListener('change', () => {
+  const game = loadedGames[Number(dom.select.value)];
+  if (game) loadRecord(game);
+});
+
+dom.prev.addEventListener('click', () => setStep(step - 1));
+dom.next.addEventListener('click', () => setStep(step + 1));
+dom.slider.addEventListener('input', () => setStep(Number(dom.slider.value)));
+dom.judge.addEventListener('click', () => runAnalysis({ judgeOnly: true }));
+dom.analyze.addEventListener('click', () => runAnalysis({ judgeOnly: false }));
+
+startDemo();
