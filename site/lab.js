@@ -41,6 +41,8 @@ const dom = {
 
 const ROLLOUTS_PER_CANDIDATE = 6;
 const MAX_ROOT_CANDIDATES = 60;
+const EXACT_EMPTY_LIMIT = 18;
+const EXACT_TIME_LIMIT = 12000;
 
 let source = null;
 let loadedGames = [];
@@ -292,6 +294,112 @@ function simulateGame(board, starter, size) {
   return { winner: result.winner, blackLead };
 }
 
+function countEmpty(board) {
+  let count = 0;
+  for (const value of board) if (value === EMPTY) count += 1;
+  return count;
+}
+
+function solveExact(board, starter, size, timeLimit = EXACT_TIME_LIMIT) {
+  const work = board.slice();
+  const started = performance.now();
+  const tt = new Map();
+  let nodes = 0;
+  let timedOut = false;
+  let bestMove = -1;
+  let bestValue = starter === WHITE ? -Infinity : Infinity;
+
+  function terminal() {
+    const analysis = analyzeGroups(work, size);
+    return analysis.black + source.komi - analysis.white;
+  }
+
+  function orderedMoves(player) {
+    const analysis = analyzeGroups(work, size);
+    const empties = [];
+    for (let index = 0; index < work.length; index += 1) {
+      if (work[index] !== EMPTY) continue;
+      const row = Math.floor(index / size);
+      const col = index % size;
+      const groups = new Set();
+      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        const next = nr * size + nc;
+        if (work[next] === player) groups.add(analysis.groupIndex[next]);
+      }
+      empties.push([index, groups.size]);
+    }
+    return empties.sort((a, b) => b[1] - a[1]);
+  }
+
+  function search(player, alpha, beta, depth) {
+    nodes += 1;
+    if ((nodes & 8191) === 0 && performance.now() - started > timeLimit) {
+      timedOut = true;
+      return 0;
+    }
+    const empties = [];
+    for (let index = 0; index < work.length; index += 1) {
+      if (work[index] === EMPTY) empties.push(index);
+    }
+    if (!empties.length) return terminal();
+    const key = work.join('') + player;
+    const cached = tt.get(key);
+    if (cached !== undefined) return cached;
+    const ordered = orderedMoves(player);
+    if (player === WHITE) {
+      let best = -Infinity;
+      for (const [index] of ordered) {
+        work[index] = WHITE;
+        const value = search(BLACK, alpha, beta, depth + 1);
+        work[index] = EMPTY;
+        if (timedOut) return best;
+        if (value > best) {
+          best = value;
+          if (depth === 0) {
+            bestValue = value;
+            bestMove = index;
+          }
+        }
+        if (best > alpha) alpha = best;
+        if (alpha >= beta) break;
+      }
+      if (!timedOut) tt.set(key, best);
+      return best;
+    }
+    let best = Infinity;
+    for (const [index] of ordered) {
+      work[index] = BLACK;
+      const value = search(WHITE, alpha, beta, depth + 1);
+      work[index] = EMPTY;
+      if (timedOut) return best;
+      if (value < best) {
+        best = value;
+        if (depth === 0) {
+          bestValue = value;
+          bestMove = index;
+        }
+      }
+      if (best < beta) beta = best;
+      if (alpha >= beta) break;
+    }
+    if (!timedOut) tt.set(key, best);
+    return best;
+  }
+
+  const whiteAdvantage = search(starter, -Infinity, Infinity, 0);
+  return {
+    solved: !timedOut,
+    whiteAdvantage,
+    bestMove: timedOut ? -1 : bestMove,
+    nodes,
+    ms: performance.now() - started,
+    ttSize: tt.size,
+  };
+}
+
 function estimate() {
   const started = performance.now();
   const candidates = makeRootCandidates();
@@ -326,7 +434,29 @@ function estimate() {
   return { results: results.slice(0, 3), blackRate, lead, total, candidates: results.length, ms: performance.now() - started, before };
 }
 
-function showEstimate(estimateResult) {
+function showExactSolve(result) {
+  const winner = result.whiteAdvantage >= 0 ? WHITE : BLACK;
+  const lead = Math.abs(result.whiteAdvantage);
+  const label = winner === WHITE ? '白胜' : '黑胜';
+  dom.verdict.replaceChildren(
+    makeElement('p', '', ''),
+    makeElement('p', '', ''),
+  );
+  dom.verdict.children[0].innerHTML = `<strong class="is-exact">精确求解</strong> · ${label}`;
+  dom.verdict.children[1].textContent = `${lead === 0 ? '同数白胜' : `${label}方最优结果领先 ${formatNumber(lead)} 间`}；这是双方最优下的终局结果。`;
+  dom.winbar.hidden = true;
+  dom.candidates.replaceChildren();
+  if (result.bestMove >= 0) {
+    const item = makeElement('div', 'lab-candidate');
+    item.append(makeElement('b', '', coordinateLabel(result.bestMove, source.size)));
+    item.append(makeElement('span', '', '精确最优落点'));
+    item.append(makeElement('strong', '', 'EXACT'));
+    dom.candidates.append(item);
+  }
+  dom.meta.textContent = `精确搜索 ${result.nodes.toLocaleString()} 节点 · ${Math.round(result.ms)} ms · ${result.ttSize.toLocaleString()} 个缓存局面`;
+}
+
+function showEstimate(estimateResult, note = '') {
   const blackPct = Math.round(estimateResult.blackRate * 100);
   const whitePct = 100 - blackPct;
   const lead = estimateResult.lead;
@@ -335,8 +465,8 @@ function showEstimate(estimateResult) {
     makeElement('p', '', ''),
     makeElement('p', '', ''),
   );
-  dom.verdict.children[0].innerHTML = `<strong class="is-estimate">AI 估计</strong> · 黑胜率 ${blackPct}% / 白胜率 ${whitePct}%`;
-  dom.verdict.children[1].textContent = `${leadText}；这是 ${estimateResult.total} 次启发式模拟的平均值，不是精确解。`;
+  dom.verdict.children[0].innerHTML = `<strong class="is-estimate">AI 估计${note ? '（未算清）' : ''}</strong> · 黑胜率 ${blackPct}% / 白胜率 ${whitePct}%`;
+  dom.verdict.children[1].textContent = `${leadText}；这是 ${estimateResult.total} 次启发式模拟的平均值，不是精确解。${note ? ` ${note}` : ''}`;
   dom.winbar.hidden = false;
   dom.winBlack.style.width = `${blackPct}%`;
   dom.winWhite.style.width = `${whitePct}%`;
@@ -364,12 +494,26 @@ async function runAnalysis({ judgeOnly = false } = {}) {
   dom.analyze.disabled = true;
   dom.judge.textContent = '计算中…';
   dom.analyze.textContent = '计算中…';
-  dom.verdict.replaceChildren(makeElement('p', '', '正在模拟终局，可能需要一两秒…'));
-  await new Promise((resolve) => window.setTimeout(resolve, 30));
+  const emptyCount = countEmpty(position);
+  let note = '';
+  await new Promise((resolve) => window.setTimeout(resolve, 20));
   try {
+    if (emptyCount <= EXACT_EMPTY_LIMIT) {
+      dom.verdict.replaceChildren(makeElement('p', '', '正在精确求解终局，可能需要几秒…'));
+      await new Promise((resolve) => window.setTimeout(resolve, 20));
+      const exact = solveExact(position, turn, source.size);
+      if (exact.solved) {
+        showExactSolve(exact);
+        return;
+      }
+      note = `精确搜索在 ${formatNumber(EXACT_TIME_LIMIT / 1000)} 秒内未完成。`;
+    } else {
+      note = `${emptyCount} 个空点，超出实时精确求解范围。`;
+    }
+    dom.verdict.replaceChildren(makeElement('p', '', '精确搜索未完成，继续跑启发式模拟…'));
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
     const result = estimate();
-    if (judgeOnly) showEstimate(result);
-    else showEstimate(result);
+    showEstimate(result, note);
   } catch (error) {
     dom.verdict.replaceChildren(makeElement('p', '', `分析失败：${error.message || error}`));
   } finally {
