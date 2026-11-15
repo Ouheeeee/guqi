@@ -8,3 +8,5 @@ dist/
 online/worker/.wrangler/
 online/worker/.dry-run/
 online/pages/.wrangler/
+
+.lab/

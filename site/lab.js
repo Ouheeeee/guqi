@@ -137,9 +137,12 @@ function renderStats() {
   dom.turn.textContent = colorName(turn);
   dom.empty.textContent = String(position.filter((value) => value === EMPTY).length);
   dom.rule.textContent = `黑方加贴 ${formatNumber(source.komi)} 间后，间数少者胜；同数白胜。`;
+  const rem = remainingStats(position, source.size, turn);
   dom.phase.textContent = ended
     ? '终局 · 精确计分'
-    : `${source.title} · 第 ${step} 手 · 黑 ${adjusted.black} / 白 ${adjusted.white}`;
+    : rem.activeMerges === 0
+      ? `官子阶段 · ${rem.empty} 空点 / ${rem.neutralBoth} 中性单关`
+      : `${source.title} · 第 ${step} 手 · 黑 ${adjusted.black} / 白 ${adjusted.white} · 单关 ${rem.neutralBoth}`;
 }
 
 function setStep(nextStep) {
@@ -340,6 +343,35 @@ function countEmpty(board) {
   return count;
 }
 
+function remainingStats(board, size, starter) {
+  const analysis = analyzeGroups(board, size);
+  let empty = 0;
+  let neutralBoth = 0;
+  let activeMerges = 0;
+  let creations = 0;
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    empty += 1;
+    const row = Math.floor(index / size);
+    const col = index % size;
+    const adjacent = { [BLACK]: new Set(), [WHITE]: new Set() };
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === BLACK) adjacent[BLACK].add(analysis.groupIndex[next]);
+      else if (board[next] === WHITE) adjacent[WHITE].add(analysis.groupIndex[next]);
+    }
+    const blackDelta = adjacent[BLACK].size === 0 ? 1 : 1 - adjacent[BLACK].size;
+    const whiteDelta = adjacent[WHITE].size === 0 ? 1 : 1 - adjacent[WHITE].size;
+    if (blackDelta === 0 && whiteDelta === 0) neutralBoth += 1;
+    if (blackDelta < 0 || whiteDelta < 0) activeMerges += 1;
+    if (blackDelta > 0 || whiteDelta > 0) creations += 1;
+  }
+  return { empty, neutralBoth, activeMerges, creations };
+}
+
 function solveExact(board, starter, size, timeLimit = EXACT_TIME_LIMIT) {
   const work = board.slice();
   const started = performance.now();
@@ -479,8 +511,6 @@ function estimate() {
   }
 
   const total = stats.reduce((sum, item) => sum + item.rollouts, 0);
-  const totalBlackWins = stats.reduce((sum, item) => sum + item.blackWins, 0);
-  const totalLead = stats.reduce((sum, item) => sum + item.leadSum, 0);
   const results = stats
     .filter((item) => item.rollouts > 0)
     .map((item) => ({
@@ -490,17 +520,30 @@ function estimate() {
       lead: item.leadSum / item.rollouts,
     }))
     .sort((a, b) => b.currentRate - a.currentRate || b.lead - a.lead);
-  const blackRate = total > 0 ? totalBlackWins / total : 0;
-  const lead = total > 0 ? totalLead / total : 0;
+  const best = results[0] || { currentWins: 0, rollouts: 0, currentRate: 0, blackRate: 0, lead: 0 };
   return {
     results: results.slice(0, 3),
-    blackRate,
-    lead,
+    best,
+    blackRate: best.blackRate,
+    lead: best.lead,
     total,
     candidates: stats.length,
     perCandidate: stats.length ? Math.round(total / stats.length) : 0,
     ms: performance.now() - started,
   };
+}
+
+function showQuietExact(stats) {
+  const result = exactResult();
+  const lead = Math.abs(result.adjustedScores.black - result.adjustedScores.white);
+  const winner = result.winner === BLACK ? '黑胜' : '白胜';
+  dom.verdict.replaceChildren(makeElement('p', '', ''),
+    makeElement('p', '', ''));
+  dom.verdict.children[0].innerHTML = `<strong class="is-exact">官子已定</strong> · ${winner}`;
+  dom.verdict.children[1].textContent = `${stats.empty} 个剩余点全是双方的中性单关，填子顺序不改变块数；按当前块数和贴目直接判定：${winner}，差 ${formatNumber(lead)} 间。`;
+  dom.winbar.hidden = true;
+  dom.candidates.replaceChildren();
+  dom.meta.textContent = `官子判定 · ${stats.neutralBoth} 个中性单关 · ${source.size} 路`;
 }
 
 function showExactSolve(result) {
@@ -534,8 +577,8 @@ function showEstimate(estimateResult, note = '') {
     makeElement('p', '', ''),
     makeElement('p', '', ''),
   );
-  dom.verdict.children[0].innerHTML = `<strong class="is-estimate">AI 估计${note ? '（未算清）' : ''}</strong> · 黑胜率 ${blackPct}% / 白胜率 ${whitePct}%`;
-  dom.verdict.children[1].textContent = `${leadText}；这是 ${estimateResult.total} 次启发式模拟的平均值，不是精确解。${note ? ` ${note}` : ''}`;
+  dom.verdict.children[0].innerHTML = `<strong class="is-estimate">AI 估计${note ? '（未算清）' : ''}</strong> · 最佳候选胜率：黑 ${blackPct}% / 白 ${whitePct}%`;
+  dom.verdict.children[1].textContent = `${leadText.replace('平均','')}；这是最佳候选的 ${estimateResult.best.rollouts} 局结果，总计 ${estimateResult.total} 局。不是精确解。${note ? ` ${note}` : ''}`;
   dom.winbar.hidden = false;
   dom.winBlack.style.width = `${blackPct}%`;
   dom.winWhite.style.width = `${whitePct}%`;
@@ -564,7 +607,17 @@ async function runAnalysis({ judgeOnly = false } = {}) {
   dom.judge.textContent = '计算中…';
   dom.analyze.textContent = '计算中…';
   const emptyCount = countEmpty(position);
+  const stats = remainingStats(position, source.size, turn);
   let note = '';
+  if (stats.empty > 0 && stats.neutralBoth === stats.empty) {
+    showQuietExact(stats);
+    busy = false;
+    dom.judge.disabled = false;
+    dom.analyze.disabled = false;
+    dom.judge.textContent = originalJudge;
+    dom.analyze.textContent = originalAnalyze;
+    return;
+  }
   await new Promise((resolve) => window.setTimeout(resolve, 20));
   try {
     if (emptyCount <= EXACT_EMPTY_LIMIT) {
@@ -577,7 +630,9 @@ async function runAnalysis({ judgeOnly = false } = {}) {
       }
       note = `精确搜索在 ${formatNumber(EXACT_TIME_LIMIT / 1000)} 秒内未完成。`;
     } else {
-      note = `${emptyCount} 个空点，超出实时精确求解范围。`;
+      note = stats.activeMerges === 0
+        ? `官子阶段：${emptyCount} 个空点，${stats.neutralBoth} 个双方中性单关；暂无合并点。`
+        : `${emptyCount} 个空点，其中 ${stats.activeMerges} 个有效合并点、${stats.neutralBoth} 个中性单关；超出实时精确求解范围。`;
     }
     dom.verdict.replaceChildren(makeElement('p', '', '精确搜索未完成，继续跑启发式模拟…'));
     await new Promise((resolve) => window.setTimeout(resolve, 20));
