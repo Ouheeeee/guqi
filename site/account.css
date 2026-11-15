@@ -817,6 +817,12 @@
   letter-spacing: 0;
 }
 
+.record-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 /* Record replay viewer */
 
 .account-modal-card {

@@ -6,7 +6,7 @@ import {
   listSavedGames,
   getSavedGame,
   deleteSavedGame,
-} from './auth-client.js?v=1.9.0';
+} from './auth-client.js?v=1.9.1';
 import {
   BLACK,
   WHITE,
@@ -17,7 +17,7 @@ import {
   komiRuleText,
   resultDescription,
   resultLabel,
-} from './game.js?v=1.9.0';
+} from './game.js?v=1.9.1';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -56,6 +56,7 @@ const dom = {
   recordSummary: $('#recordSummary'),
   recordScores: $('#recordScores'),
   recordCopy: $('#recordCopy'),
+  recordExport: $('#recordExport'),
   recordMoves: $('#recordMoves'),
   recordStepLabel: $('#recordStepLabel'),
   recordLastMove: $('#recordLastMove'),
@@ -77,6 +78,7 @@ let savedGames = [];
 let toastTimer = null;
 let recordOpener = null;
 let lastRecordOrder = '';
+let currentRecordDetail = null;
 let replayState = null;
 let replayTimer = null;
 const returnTo = safeReturnTo(new URLSearchParams(location.search).get('return'));
@@ -274,6 +276,39 @@ async function loadLibrary() {
   }
 }
 
+function downloadJson(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function exportCurrentRecord() {
+  if (!currentRecordDetail) {
+    showToast('棋谱还在读取中');
+    return;
+  }
+  const detail = currentRecordDetail;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const payload = {
+    format: 'guqi-records-v1',
+    scope: 'single',
+    exportedAt: new Date().toISOString(),
+    user: currentUser ? {
+      displayName: currentUser.displayName || '',
+      email: currentUser.email || '',
+    } : null,
+    games: [detail],
+  };
+  downloadJson(payload, `guqi-record-${detail.id}-${stamp}.json`);
+  showToast('已导出当前棋谱');
+}
+
 async function exportRecords() {
   if (!savedGames.length) {
     showToast('还没有可导出的棋谱');
@@ -294,16 +329,8 @@ async function exportRecords() {
       } : null,
       games: details,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-    anchor.href = url;
-    anchor.download = `guqi-records-${stamp}.json`;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    downloadJson(payload, `guqi-records-${stamp}.json`);
     showToast(`已导出 ${details.length} 盘棋谱`);
   } catch (error) {
     showToast(error.message || '导出失败');
@@ -431,10 +458,14 @@ async function openRecord(game) {
   dom.recordMoves.replaceChildren();
   stopReplay();
   replayState = null;
+  currentRecordDetail = null;
+  dom.recordExport.disabled = true;
   dom.recordModal.hidden = false;
   dom.recordClose.focus({ preventScroll: true });
   try {
     const detail = await getSavedGame(game.id);
+    currentRecordDetail = detail;
+    dom.recordExport.disabled = false;
     const state = detail.state;
     const result = state.result;
     dom.recordTitle.textContent = detail.title;
@@ -565,6 +596,7 @@ function bindEvents() {
     stopReplay();
     renderReplay(Number(item.dataset.step));
   });
+  dom.recordExport.addEventListener('click', exportCurrentRecord);
   dom.recordCopy.addEventListener('click', async () => {
     if (!lastRecordOrder) return;
     try {
