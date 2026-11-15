@@ -20,6 +20,7 @@ const dom = {
   file: $('#recordFile'),
   select: $('#gameSelect'),
   policy: $('#policySelect'),
+  demoSize: $('#demoSize'),
   slider: $('#labSlider'),
   stepLabel: $('#labStepLabel'),
   prev: $('#labPrev'),
@@ -679,12 +680,12 @@ function loadSource(nextSource) {
   if (ended) showExact();
 }
 
-function startDemo() {
-  const demo = createGame(13, { komi: 0.5 });
+function startDemo(size = 13) {
+  const demo = createGame(size, { komi: 0.5 });
   demo.phase = 'playing';
   demo.turn = BLACK;
   loadSource({
-    title: '体验局面 · 13 路',
+    title: `体验局面 · ${size} 路`,
     size: demo.size,
     komi: demo.komi,
     start: demo.board.slice(),
@@ -754,6 +755,7 @@ dom.slider.addEventListener('input', () => setStep(Number(dom.slider.value)));
 dom.judge.addEventListener('click', () => runAnalysis({ judgeOnly: true }));
 dom.analyze.addEventListener('click', () => runAnalysis({ judgeOnly: false }));
 
-startDemo();
+dom.demoSize.addEventListener('change', () => startDemo(Number(dom.demoSize.value)));
+startDemo(Number(dom.demoSize.value) || 13);
 
 
