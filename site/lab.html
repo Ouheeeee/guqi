@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋实验室：导入棋谱，估算胜率与候选落点。">
   <title>实验室 · 孤棋</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=lab3">
-  <link rel="stylesheet" href="./lab.css?v=lab3">
+  <link rel="stylesheet" href="./styles.css?v=lab4">
+  <link rel="stylesheet" href="./lab.css?v=lab4">
 </head>
 <body class="lab-body">
   <a class="skip-link" href="#labMain">跳到实验内容</a>
@@ -48,6 +48,13 @@
           <label class="btn btn-soft lab-file" for="recordFile">导入棋谱 JSON</label>
           <input id="recordFile" type="file" accept=".json,application/json" hidden>
           <select id="gameSelect" class="lab-select" hidden aria-label="选择棋谱"></select>
+          <label class="lab-policy">计算策略
+            <select id="policySelect" class="lab-select">
+              <option value="baseline">基线：全候选</option>
+              <option value="conservative">规避孤立新块</option>
+              <option value="strict">有合并不造新块</option>
+            </select>
+          </label>
         </div>
       </div>
 
@@ -109,6 +116,6 @@
     <span>导入单盘 JSON 即可分析</span>
   </footer>
 
-  <script type="module" src="./lab.js?v=lab3"></script>
+  <script type="module" src="./lab.js?v=lab4"></script>
 </body>
 </html>

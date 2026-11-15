@@ -19,6 +19,7 @@ const dom = {
   source: $('#labSource'),
   file: $('#recordFile'),
   select: $('#gameSelect'),
+  policy: $('#policySelect'),
   slider: $('#labSlider'),
   stepLabel: $('#labStepLabel'),
   prev: $('#labPrev'),
@@ -53,6 +54,7 @@ let position = [];
 let turn = BLACK;
 let ended = false;
 let busy = false;
+let policy = 'baseline';
 
 function otherColor(color) {
   return color === BLACK ? WHITE : BLACK;
@@ -211,6 +213,20 @@ function candidateLabel(delta, opponentDelta = 1) {
   return '新块';
 }
 
+function isObviouslyBad(entry) {
+  if (entry.delta <= 0) return false;
+  if (entry.opponentDelta < 0) return false;
+  if (policy === 'conservative') return entry.emptyNeighbors === 0;
+  if (policy === 'strict') return true;
+  return false;
+}
+
+function filterByPolicy(entries) {
+  if (policy === 'baseline') return entries;
+  const safe = entries.filter((entry) => !isObviouslyBad(entry));
+  return safe.length ? safe : entries;
+}
+
 function makeRootCandidates() {
   const analysis = analyzeGroups(position, source.size);
   const entries = [];
@@ -220,9 +236,18 @@ function makeRootCandidates() {
     const opponent = adjacentOwnGroups(position, source.size, index, otherColor(turn), analysis);
     const delta = own.size === 0 ? 1 : 1 - own.size;
     const opponentDelta = opponent.size === 0 ? 1 : 1 - opponent.size;
-    entries.push({ index, delta, opponentDelta, priority: delta + opponentDelta * 0.35 });
+    const row = Math.floor(index / source.size);
+    const col = index % source.size;
+    let emptyNeighbors = 0;
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= source.size || nc < 0 || nc >= source.size) continue;
+      if (position[nr * source.size + nc] === EMPTY) emptyNeighbors += 1;
+    }
+    entries.push({ index, delta, opponentDelta, emptyNeighbors, priority: delta + opponentDelta * 0.35 });
   }
-  const sorted = entries.slice().sort((a, b) => a.priority - b.priority || a.index - b.index);
+  const sorted = filterByPolicy(entries).sort((a, b) => a.priority - b.priority || a.index - b.index);
   const selected = [];
   const seen = new Set();
   const add = (entry) => {
@@ -256,27 +281,40 @@ function makeRootCandidates() {
 
 function chooseRolloutMove(board, size, color) {
   const analysis = analyzeGroups(board, size);
-  const empties = [];
+  const entries = [];
   let bestPriority = Infinity;
-  const best = [];
+  let best = [];
   for (let index = 0; index < board.length; index += 1) {
     if (board[index] !== EMPTY) continue;
-    empties.push(index);
-    const own = adjacentOwnGroups(board, size, index, color, analysis);
-    const opponent = adjacentOwnGroups(board, size, index, otherColor(color), analysis);
+    const row = Math.floor(index / size);
+    const col = index % size;
+    const own = new Set();
+    const opponent = new Set();
+    let emptyNeighbors = 0;
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === color) own.add(analysis.groupIndex[next]);
+      else if (board[next] === otherColor(color)) opponent.add(analysis.groupIndex[next]);
+      else emptyNeighbors += 1;
+    }
     const delta = own.size === 0 ? 1 : 1 - own.size;
     const opponentDelta = opponent.size === 0 ? 1 : 1 - opponent.size;
-    const priority = delta + opponentDelta * 0.35;
-    if (priority < bestPriority) {
-      bestPriority = priority;
-      best.length = 0;
-      best.push(index);
-    } else if (priority === bestPriority) {
-      best.push(index);
+    entries.push({ index, delta, opponentDelta, emptyNeighbors, priority: delta + opponentDelta * 0.35 });
+  }
+  if (!entries.length) return -1;
+  const candidates = filterByPolicy(entries);
+  for (const entry of candidates) {
+    if (entry.priority < bestPriority) {
+      bestPriority = entry.priority;
+      best = [entry.index];
+    } else if (entry.priority === bestPriority) {
+      best.push(entry.index);
     }
   }
-  if (!empties.length) return -1;
-  if (Math.random() < 0.08) return empties[Math.floor(Math.random() * empties.length)];
+  if (Math.random() < 0.08) return candidates[Math.floor(Math.random() * candidates.length)].index;
   return best[Math.floor(Math.random() * best.length)];
 }
 
@@ -509,7 +547,7 @@ function showEstimate(estimateResult, note = '') {
     item.append(makeElement('strong', '', `#${index + 1}`));
     dom.candidates.append(item);
   }
-  dom.meta.textContent = `${estimateResult.candidates} 个候选 · 共 ${estimateResult.total.toLocaleString()} 局 · 约 ${estimateResult.perCandidate} 局/候选 · ${Math.round(estimateResult.ms)} ms · ${source.size} 路`;
+  dom.meta.textContent = `${estimateResult.candidates} 个候选 · 共 ${estimateResult.total.toLocaleString()} 局 · 约 ${estimateResult.perCandidate} 局/候选 · ${Math.round(estimateResult.ms)} ms · ${source.size} 路 · 策略：${policy}`;
 }
 
 async function runAnalysis({ judgeOnly = false } = {}) {
@@ -625,6 +663,11 @@ dom.file.addEventListener('change', async () => {
     dom.source.textContent = '导入失败';
     dom.verdict.replaceChildren(makeElement('p', '', error.message || '无法读取 JSON'));
   }
+});
+
+dom.policy.addEventListener('change', () => {
+  policy = dom.policy.value;
+  clearOutput();
 });
 
 dom.select.addEventListener('change', () => {

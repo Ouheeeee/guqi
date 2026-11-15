@@ -298,3 +298,18 @@
     padding: 10px;
   }
 }
+
+
+.lab-policy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.lab-policy .lab-select {
+  min-height: 28px;
+  max-width: 170px;
+  font-size: 8px;
+}
