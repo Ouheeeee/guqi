@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋实验室：导入棋谱，估算胜率与候选落点。">
   <title>实验室 · 孤棋</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=lab2">
-  <link rel="stylesheet" href="./lab.css?v=lab2">
+  <link rel="stylesheet" href="./styles.css?v=lab3">
+  <link rel="stylesheet" href="./lab.css?v=lab3">
 </head>
 <body class="lab-body">
   <a class="skip-link" href="#labMain">跳到实验内容</a>
@@ -99,7 +99,7 @@
         </div>
         <div class="lab-candidates" id="labCandidates"></div>
         <p class="lab-meta" id="labMeta"></p>
-        <p class="lab-caveat">空点不超过 18 个时尝试精确求解；超出会明确标注“未算清”，只给启发式估计。联机结算仍由双方确认。</p>
+        <p class="lab-caveat">空点不超过 18 个时精确求解；超过 18 个用约 2.6 秒预算跑启发式模拟，未算清会明确标注。联机结算仍由双方确认。</p>
       </section>
     </aside>
   </main>
@@ -109,6 +109,6 @@
     <span>导入单盘 JSON 即可分析</span>
   </footer>
 
-  <script type="module" src="./lab.js?v=lab2"></script>
+  <script type="module" src="./lab.js?v=lab3"></script>
 </body>
 </html>

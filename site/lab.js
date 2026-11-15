@@ -8,7 +8,7 @@ import {
   createGame,
   formatNumber,
   judgeScores,
-} from './game.js?v=1.9.2';
+} from './game.js?v=1.9.3';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -39,8 +39,10 @@ const dom = {
   meta: $('#labMeta'),
 };
 
-const ROLLOUTS_PER_CANDIDATE = 6;
 const MAX_ROOT_CANDIDATES = 60;
+const SIMULATION_TIME_BUDGET = 2600;
+const MIN_ROLLOUTS_PER_CANDIDATE = 4;
+const MAX_ROLLOUTS_PER_CANDIDATE = 1200;
 const EXACT_EMPTY_LIMIT = 18;
 const EXACT_TIME_LIMIT = 12000;
 
@@ -403,35 +405,64 @@ function solveExact(board, starter, size, timeLimit = EXACT_TIME_LIMIT) {
 function estimate() {
   const started = performance.now();
   const candidates = makeRootCandidates();
-  const before = analyzeGroups(position, source.size);
-  const results = candidates.map((candidate) => {
+  const stats = candidates.map((candidate) => ({
+    ...candidate,
+    rollouts: 0,
+    currentWins: 0,
+    blackWins: 0,
+    leadSum: 0,
+  }));
+  const deadline = started + SIMULATION_TIME_BUDGET;
+
+  const runOne = (item) => {
     const board = position.slice();
-    board[candidate.index] = turn;
-    let currentWins = 0;
-    let blackWins = 0;
-    let leadSum = 0;
-    const actual = [];
-    for (let index = 0; index < ROLLOUTS_PER_CANDIDATE; index += 1) {
-      const outcome = simulateGame(board, otherColor(turn), source.size);
-      actual.push(outcome);
-      if (outcome.winner === turn) currentWins += 1;
-      if (outcome.winner === BLACK) blackWins += 1;
-      leadSum += outcome.blackLead;
+    board[item.index] = turn;
+    const outcome = simulateGame(board, otherColor(turn), source.size);
+    item.rollouts += 1;
+    if (outcome.winner === turn) item.currentWins += 1;
+    if (outcome.winner === BLACK) item.blackWins += 1;
+    item.leadSum += outcome.blackLead;
+  };
+
+  // Every candidate gets a minimum sample; then round-robin uses the remaining budget evenly.
+  for (const item of stats) {
+    if (item.rollouts >= MIN_ROLLOUTS_PER_CANDIDATE) continue;
+    while (item.rollouts < MIN_ROLLOUTS_PER_CANDIDATE && performance.now() < deadline) runOne(item);
+  }
+  let progressed = true;
+  while (progressed && performance.now() < deadline) {
+    progressed = false;
+    for (const item of stats) {
+      if (performance.now() >= deadline) break;
+      if (item.rollouts >= MAX_ROLLOUTS_PER_CANDIDATE) continue;
+      runOne(item);
+      progressed = true;
     }
-    const currentRate = currentWins / ROLLOUTS_PER_CANDIDATE;
-    const blackRate = blackWins / ROLLOUTS_PER_CANDIDATE;
-    return {
-      ...candidate,
-      currentRate,
-      blackRate,
-      lead: leadSum / ROLLOUTS_PER_CANDIDATE,
-    };
-  });
-  results.sort((a, b) => b.currentRate - a.currentRate || b.lead - a.lead);
-  const total = results.length * ROLLOUTS_PER_CANDIDATE;
-  const blackRate = results.reduce((sum, item) => sum + item.blackRate, 0) / Math.max(1, results.length);
-  const lead = results.reduce((sum, item) => sum + item.lead, 0) / Math.max(1, results.length);
-  return { results: results.slice(0, 3), blackRate, lead, total, candidates: results.length, ms: performance.now() - started, before };
+  }
+
+  const total = stats.reduce((sum, item) => sum + item.rollouts, 0);
+  const totalBlackWins = stats.reduce((sum, item) => sum + item.blackWins, 0);
+  const totalLead = stats.reduce((sum, item) => sum + item.leadSum, 0);
+  const results = stats
+    .filter((item) => item.rollouts > 0)
+    .map((item) => ({
+      ...item,
+      currentRate: item.currentWins / item.rollouts,
+      blackRate: item.blackWins / item.rollouts,
+      lead: item.leadSum / item.rollouts,
+    }))
+    .sort((a, b) => b.currentRate - a.currentRate || b.lead - a.lead);
+  const blackRate = total > 0 ? totalBlackWins / total : 0;
+  const lead = total > 0 ? totalLead / total : 0;
+  return {
+    results: results.slice(0, 3),
+    blackRate,
+    lead,
+    total,
+    candidates: stats.length,
+    perCandidate: stats.length ? Math.round(total / stats.length) : 0,
+    ms: performance.now() - started,
+  };
 }
 
 function showExactSolve(result) {
@@ -478,7 +509,7 @@ function showEstimate(estimateResult, note = '') {
     item.append(makeElement('strong', '', `#${index + 1}`));
     dom.candidates.append(item);
   }
-  dom.meta.textContent = `${estimateResult.candidates} 个候选 × ${ROLLOUTS_PER_CANDIDATE} 次 = ${estimateResult.total} 次模拟 · ${Math.round(estimateResult.ms)} ms · ${source.size} 路`;
+  dom.meta.textContent = `${estimateResult.candidates} 个候选 · 共 ${estimateResult.total.toLocaleString()} 局 · 约 ${estimateResult.perCandidate} 局/候选 · ${Math.round(estimateResult.ms)} ms · ${source.size} 路`;
 }
 
 async function runAnalysis({ judgeOnly = false } = {}) {
@@ -608,3 +639,5 @@ dom.judge.addEventListener('click', () => runAnalysis({ judgeOnly: true }));
 dom.analyze.addEventListener('click', () => runAnalysis({ judgeOnly: false }));
 
 startDemo();
+
+
