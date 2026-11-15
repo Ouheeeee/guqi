@@ -7,8 +7,8 @@
   <meta name="description" content="孤棋实验室：导入棋谱，估算胜率与候选落点。">
   <title>实验室 · 孤棋</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=lab7">
-  <link rel="stylesheet" href="./lab.css?v=lab7">
+  <link rel="stylesheet" href="./styles.css?v=lab8">
+  <link rel="stylesheet" href="./lab.css?v=lab8">
 </head>
 <body class="lab-body">
   <a class="skip-link" href="#labMain">跳到实验内容</a>
@@ -64,13 +64,25 @@
         </div>
       </div>
 
+      <div class="lab-ai-bar">
+        <button type="button" class="btn btn-primary" id="aiStart">与 AI 对弈</button>
+        <label class="lab-policy">我执
+          <select id="aiSide" class="lab-select">
+            <option value="black">黑</option>
+            <option value="white">白</option>
+          </select>
+        </label>
+        <button type="button" class="text-button" id="aiExit" hidden>退出 AI</button>
+        <span id="aiStatus" class="lab-ai-status"></span>
+      </div>
+
       <div class="board-shell lab-shell">
         <div class="coords coords-top" id="labCoordTop" aria-hidden="true"></div>
         <div class="coords coords-left" id="labCoordLeft" aria-hidden="true"></div>
         <div id="labBoard" class="board lab-board" role="img" aria-label="实验棋盘"></div>
       </div>
 
-      <div class="lab-step">
+      <div class="lab-step" id="labStep">
         <button type="button" class="replay-btn" id="labPrev" aria-label="上一手">‹</button>
         <input type="range" class="replay-slider" id="labSlider" min="0" max="0" value="0" step="1" aria-label="棋谱手数" />
         <button type="button" class="replay-btn" id="labNext" aria-label="下一手">›</button>
@@ -122,6 +134,6 @@
     <span>导入单盘 JSON 即可分析</span>
   </footer>
 
-  <script type="module" src="./lab.js?v=lab7"></script>
+  <script type="module" src="./lab.js?v=lab8"></script>
 </body>
 </html>

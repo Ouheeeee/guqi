@@ -313,3 +313,31 @@
   max-width: 170px;
   font-size: 8px;
 }
+
+
+.lab-ai-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 auto 10px;
+}
+
+.lab-ai-bar .btn {
+  min-height: 34px;
+  font-size: 9px;
+}
+
+.lab-ai-bar .text-button {
+  color: var(--graphite);
+}
+
+.lab-ai-status {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.lab-board.ai-mode {
+  cursor: pointer;
+}

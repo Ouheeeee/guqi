@@ -21,6 +21,11 @@ const dom = {
   select: $('#gameSelect'),
   policy: $('#policySelect'),
   demoSize: $('#demoSize'),
+  aiStart: $('#aiStart'),
+  aiExit: $('#aiExit'),
+  aiSide: $('#aiSide'),
+  aiStatus: $('#aiStatus'),
+  stepBar: $('#labStep'),
   slider: $('#labSlider'),
   stepLabel: $('#labStepLabel'),
   prev: $('#labPrev'),
@@ -56,6 +61,10 @@ let turn = BLACK;
 let ended = false;
 let busy = false;
 let policy = 'baseline';
+let aiMode = false;
+let aiHumanColor = BLACK;
+let aiThinking = false;
+let aiTimer = null;
 
 function otherColor(color) {
   return color === BLACK ? WHITE : BLACK;
@@ -141,7 +150,7 @@ function renderStats() {
   const rem = remainingStats(position, source.size, turn);
   dom.phase.textContent = ended
     ? '终局 · 精确计分'
-    : rem.activeMerges === 0
+    : rem.empty <= 50 && rem.activeMerges === 0
       ? `官子阶段 · 中性 ${rem.neutralBoth} / 双方各加一 ${rem.doubleNew} / 单方新块 ${rem.blackOnlyNew + rem.whiteOnlyNew}`
       : `${source.title} · 第 ${step} 手 · 黑 ${adjusted.black} / 白 ${adjusted.white} · 单关 ${rem.neutralBoth}`;
 }
@@ -649,7 +658,7 @@ async function runAnalysis({ judgeOnly = false } = {}) {
       }
       note = `精确搜索在 ${formatNumber(EXACT_TIME_LIMIT / 1000)} 秒内未完成。`;
     } else {
-      note = stats.activeMerges === 0
+      note = stats.activeMerges === 0 && emptyCount <= 50
         ? `官子阶段：${emptyCount} 个空点，${stats.neutralBoth} 个双方中性单关；暂无合并点。`
         : `${emptyCount} 个空点：${stats.neutralBoth} 中性、${stats.doubleNew} 双方各加一、${stats.blackOnlyNew + stats.whiteOnlyNew} 单方新块、${stats.activeMerges} 有效合并点；超出实时精确求解范围。`;
     }
@@ -669,6 +678,7 @@ async function runAnalysis({ judgeOnly = false } = {}) {
 }
 
 function loadSource(nextSource) {
+  if (aiMode) stopAiMode();
   source = nextSource;
   step = nextSource.history.length;
   position = nextSource.start.slice();
@@ -678,6 +688,157 @@ function loadSource(nextSource) {
   buildBoard(nextSource.size);
   setStep(step);
   if (ended) showExact();
+}
+
+function clearAiTimer() {
+  if (aiTimer) window.clearTimeout(aiTimer);
+  aiTimer = null;
+}
+
+function updateAiStatus(text) {
+  dom.aiStatus.textContent = text || '';
+}
+
+function stopAiMode() {
+  aiMode = false;
+  aiThinking = false;
+  clearAiTimer();
+  dom.aiStart.hidden = false;
+  dom.aiExit.hidden = true;
+  dom.stepBar.style.display = '';
+  dom.board.classList.remove('ai-mode');
+  dom.judge.disabled = false;
+  dom.analyze.disabled = false;
+  updateAiStatus('');
+}
+
+function aiMovePriority(entry, weights) {
+  return entry.delta + weights.opp * entry.opponentDelta - weights.space * (entry.emptyNeighbors / 4);
+}
+
+function chooseAiMove(board, size, color) {
+  const analysis = analyzeGroups(board, size);
+  const entries = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    const row = Math.floor(index / size);
+    const col = index % size;
+    const own = new Set();
+    const opponent = new Set();
+    let emptyNeighbors = 0;
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === color) own.add(analysis.groupIndex[next]);
+      else if (board[next] === otherColor(color)) opponent.add(analysis.groupIndex[next]);
+      else emptyNeighbors += 1;
+    }
+    entries.push({
+      index,
+      delta: own.size === 0 ? 1 : 1 - own.size,
+      opponentDelta: opponent.size === 0 ? 1 : 1 - opponent.size,
+      emptyNeighbors,
+    });
+  }
+  if (!entries.length) return -1;
+  const weights = { opp: 0.224, random: 0.03, space: 0.093 };
+  const candidates = filterByPolicy(entries);
+  if (Math.random() < weights.random) return candidates[Math.floor(Math.random() * candidates.length)].index;
+  let best = Infinity;
+  const picks = [];
+  for (const entry of candidates) {
+    const p = aiMovePriority(entry, weights);
+    if (p < best) { best = p; picks.length = 0; picks.push(entry.index); }
+    else if (p === best) picks.push(entry.index);
+  }
+  return picks[Math.floor(Math.random() * picks.length)];
+}
+
+function placeAiMove(index, color) {
+  if (position[index] !== EMPTY) return false;
+  position[index] = color;
+  source.history.push({ index, color, moveNumber: source.history.length + 1 });
+  step = source.history.length;
+  turn = otherColor(color);
+  if (position.every((value) => value !== EMPTY)) {
+    ended = true;
+    source.ended = true;
+    renderBoard();
+    renderStats();
+    showExact();
+    updateAiStatus('终局');
+    dom.aiExit.hidden = false;
+    aiThinking = false;
+    return true;
+  }
+  renderBoard();
+  renderStats();
+  clearOutput();
+  return true;
+}
+
+function scheduleAiMove() {
+  if (!aiMode || ended || aiThinking || turn === aiHumanColor) return;
+  aiThinking = true;
+  updateAiStatus('AI 思考中…');
+  aiTimer = window.setTimeout(() => {
+    aiTimer = null;
+    if (!aiMode || ended || turn === aiHumanColor) { aiThinking = false; return; }
+    let index = -1;
+    const empty = position.filter((value) => value === EMPTY).length;
+    if (empty <= 18) {
+      const solved = solveExact(position, turn, source.size, 3000);
+      if (solved.solved && solved.bestMove >= 0) index = solved.bestMove;
+    }
+    if (index < 0) index = chooseAiMove(position, source.size, turn);
+    if (index >= 0) placeAiMove(index, turn);
+    aiThinking = false;
+    if (!ended) updateAiStatus(turn === aiHumanColor ? '轮到你' : 'AI 思考中…');
+    if (!ended && turn !== aiHumanColor) scheduleAiMove();
+  }, 320);
+}
+
+function startAiGame() {
+  stopAiMode();
+  aiHumanColor = dom.aiSide.value === 'white' ? WHITE : BLACK;
+  const size = Number(dom.demoSize.value) || 13;
+  const demo = createGame(size, { komi: 0.5 });
+  demo.phase = 'playing';
+  demo.turn = BLACK;
+  loadSource({
+    title: `AI 对弈 · ${size} 路 · 你执${aiHumanColor === BLACK ? '黑' : '白'}`,
+    size: demo.size,
+    komi: demo.komi,
+    start: demo.board.slice(),
+    history: [],
+    ended: false,
+  });
+  aiMode = true;
+  aiThinking = false;
+  dom.aiStart.hidden = true;
+  dom.aiExit.hidden = false;
+  dom.stepBar.style.display = 'none';
+  dom.board.classList.add('ai-mode');
+  dom.judge.disabled = true;
+  dom.analyze.disabled = true;
+  updateAiStatus(turn === aiHumanColor ? '轮到你' : 'AI 先手');
+  if (turn !== aiHumanColor) scheduleAiMove();
+}
+
+function handleAiBoard(event) {
+  if (!aiMode || ended || aiThinking || turn !== aiHumanColor) return;
+  const cell = event.target.closest('.cell');
+  if (!cell) return;
+  const index = Number(cell.dataset.index);
+  if (!Number.isInteger(index) || position[index] !== EMPTY) return;
+  const color = turn;
+  if (!placeAiMove(index, color)) return;
+  if (!ended) {
+    updateAiStatus('AI 思考中…');
+    scheduleAiMove();
+  }
 }
 
 function startDemo(size = 13) {
@@ -755,7 +916,10 @@ dom.slider.addEventListener('input', () => setStep(Number(dom.slider.value)));
 dom.judge.addEventListener('click', () => runAnalysis({ judgeOnly: true }));
 dom.analyze.addEventListener('click', () => runAnalysis({ judgeOnly: false }));
 
-dom.demoSize.addEventListener('change', () => startDemo(Number(dom.demoSize.value)));
+dom.demoSize.addEventListener('change', () => { if (!aiMode) startDemo(Number(dom.demoSize.value)); });
+dom.aiStart.addEventListener('click', startAiGame);
+dom.aiExit.addEventListener('click', () => { stopAiMode(); startDemo(Number(dom.demoSize.value) || 13); });
+dom.board.addEventListener('click', handleAiBoard);
 startDemo(Number(dom.demoSize.value) || 13);
 
 
