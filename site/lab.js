@@ -857,7 +857,9 @@ function chooseAiMove(board, size, color) {
   }
   if (!entries.length) return -1;
   const weights = { opp: 0.224, random: 0.03, space: 0.093 };
-  const candidates = filterByPolicy(entries);
+  const eyes = ownEyePoints(board, size, color);
+  const safeEntries = entries.filter((entry) => !eyes.has(entry.index));
+  const candidates = filterByPolicy(safeEntries.length ? safeEntries : entries);
   if (Math.random() < weights.random) return candidates[Math.floor(Math.random() * candidates.length)].index;
   let best = Infinity;
   const picks = [];
@@ -870,7 +872,10 @@ function chooseAiMove(board, size, color) {
 }
 
 function chooseMctsMove(board, size, color) {
-  const candidates = makeRootCandidates().slice(0, 6);
+  const allCandidates = makeRootCandidates();
+  const eyes = ownEyePoints(board, size, color);
+  const safeCandidates = allCandidates.filter((candidate) => !eyes.has(candidate.index));
+  const candidates = (safeCandidates.length ? safeCandidates : allCandidates).slice(0, 6);
   if (!candidates.length) return chooseAiMove(board, size, color);
   const stats = candidates.map((candidate) => ({
     index: candidate.index,
@@ -907,6 +912,37 @@ function chooseMctsMove(board, size, color) {
   }));
   scored.sort((a, b) => b.rate - a.rate || b.averageLead - a.averageLead);
   return scored[0].index;
+}
+
+function ownEyePoints(board, size, color) {
+  const seen = new Uint8Array(board.length);
+  const eyes = new Set();
+  for (let start = 0; start < board.length; start += 1) {
+    if (board[start] !== EMPTY || seen[start]) continue;
+    const queue = [start];
+    seen[start] = 1;
+    const cells = [];
+    let bad = false;
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      cells.push(cell);
+      const row = Math.floor(cell / size);
+      const col = cell % size;
+      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nr = row + dr;
+        const nc = col + dc;
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) { bad = true; continue; }
+        const next = nr * size + nc;
+        if (board[next] === EMPTY) {
+          if (!seen[next]) { seen[next] = 1; queue.push(next); }
+        } else if (board[next] !== color) {
+          bad = true;
+        }
+      }
+    }
+    if (!bad) for (const cell of cells) eyes.add(cell);
+  }
+  return eyes;
 }
 
 function abEvaluate(board, size, komi) {
@@ -960,7 +996,9 @@ function abOrderMoves(board, size, color, limit) {
     entries.push({ index, priority: delta + 0.2727 * oppDelta - 0.0048 * (space / 4) });
   }
   entries.sort((a, b) => a.priority - b.priority);
-  return entries.slice(0, limit).map((entry) => entry.index);
+  const eyes = ownEyePoints(board, size, color);
+  const safeEntries = entries.filter((entry) => !eyes.has(entry.index));
+  return (safeEntries.length ? safeEntries : entries).slice(0, limit).map((entry) => entry.index);
 }
 
 function chooseAbMove(board, size, color, komi, timeLimit = 320) {
