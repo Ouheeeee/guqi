@@ -9,7 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab16';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab17';
+import { chooseSearchMove } from './ab-search.js?v=lab17';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -1096,6 +1097,16 @@ function placeAiMove(index, color) {
   return true;
 }
 
+function chooseDeepAbMove(board, size, color, komi, timeLimit = 1000) {
+  try {
+    const result = chooseSearchMove(board, color, { size, komi, timeMs: timeLimit, maxDepth: 12 });
+    if (result.move >= 0 && !ownEyePoints(board, size, color).has(result.move)) return result.move;
+  } catch (error) {
+    // Fall through to the simple AB with eye filtering.
+  }
+  return chooseAbMove(board, size, color, komi, 320);
+}
+
 function scheduleAiMove() {
   if (!aiMode || ended || aiThinking || turn === aiHumanColor) return;
   aiThinking = true;
@@ -1110,7 +1121,7 @@ function scheduleAiMove() {
       if (solved.solved && solved.bestMove >= 0) index = solved.bestMove;
     }
     if (index < 0) {
-      if (aiLevel === 'ab') index = chooseAbMove(position, source.size, turn, source.komi, 320);
+      if (aiLevel === 'ab') index = chooseDeepAbMove(position, source.size, turn, source.komi, 1000);
       else if (aiLevel === 'mcts' && empty <= 70) index = chooseMctsMove(position, source.size, turn);
       else index = chooseAiMove(position, source.size, turn);
     }
