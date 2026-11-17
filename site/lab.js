@@ -9,6 +9,7 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab16';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -150,11 +151,16 @@ function renderStats() {
   dom.empty.textContent = String(position.filter((value) => value === EMPTY).length);
   dom.rule.textContent = `黑方加贴 ${formatNumber(source.komi)} 间后，间数少者胜；同数白胜。`;
   const rem = remainingStats(position, source.size, turn);
-  dom.phase.textContent = ended
+  const eyeShapes = ended
+    ? []
+    : [...findSecondLineEyeShapes(position, source.size, BLACK), ...findSecondLineEyeShapes(position, source.size, WHITE)];
+  const eyeText = eyeShapes.slice(0, 2).map((shape) => `${colorName(shape.defender)}${describeEyeShape(shape)}`).join(' / ');
+  const basePhase = ended
     ? '终局 · 精确计分'
     : rem.empty <= 50 && rem.activeMerges === 0
       ? `官子阶段 · 中性 ${rem.neutralBoth} / 双方各加一 ${rem.doubleNew} / 单方新块 ${rem.blackOnlyNew + rem.whiteOnlyNew}`
       : `${source.title} · 第 ${step} 手 · 黑 ${adjusted.black} / 白 ${adjusted.white} · 单关 ${rem.neutralBoth}`;
+  dom.phase.textContent = eyeText ? `${basePhase} · 二线眼位 ${eyeText}` : basePhase;
 }
 
 function setStep(nextStep) {
