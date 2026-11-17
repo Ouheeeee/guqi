@@ -909,6 +909,126 @@ function chooseMctsMove(board, size, color) {
   return scored[0].index;
 }
 
+function abEvaluate(board, size, komi) {
+  const analysis = analyzeGroups(board, size);
+  let score = 1000 * (analysis.black + komi - analysis.white);
+  let blackBest = Infinity;
+  let whiteBest = Infinity;
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    const row = Math.floor(index / size);
+    const col = index % size;
+    const blackGroups = new Set();
+    const whiteGroups = new Set();
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === BLACK) blackGroups.add(analysis.groupIndex[next]);
+      else if (board[next] === WHITE) whiteGroups.add(analysis.groupIndex[next]);
+    }
+    const bd = blackGroups.size === 0 ? 1 : 1 - blackGroups.size;
+    const wd = whiteGroups.size === 0 ? 1 : 1 - whiteGroups.size;
+    if (bd < blackBest) blackBest = bd;
+    if (wd < whiteBest) whiteBest = wd;
+  }
+  return score + 90 * blackBest - 90 * whiteBest;
+}
+
+function abOrderMoves(board, size, color, limit) {
+  const analysis = analyzeGroups(board, size);
+  const entries = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    const row = Math.floor(index / size);
+    const col = index % size;
+    const own = new Set();
+    const opponent = new Set();
+    let space = 0;
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === color) own.add(analysis.groupIndex[next]);
+      else if (board[next] === otherColor(color)) opponent.add(analysis.groupIndex[next]);
+      else space += 1;
+    }
+    const delta = own.size === 0 ? 1 : 1 - own.size;
+    const oppDelta = opponent.size === 0 ? 1 : 1 - opponent.size;
+    entries.push({ index, priority: delta + 0.2727 * oppDelta - 0.0048 * (space / 4) });
+  }
+  entries.sort((a, b) => a.priority - b.priority);
+  return entries.slice(0, limit).map((entry) => entry.index);
+}
+
+function chooseAbMove(board, size, color, komi, timeLimit = 320) {
+  const started = performance.now();
+  const tt = new Map();
+  let nodes = 0;
+  let timedOut = false;
+  let bestMove = -1;
+  const terminal = (work) => {
+    const analysis = analyzeGroups(work, size);
+    const result = judgeScores({ black: analysis.black, white: analysis.white }, komi);
+    return result.adjustedScores.black - result.adjustedScores.white;
+  };
+  function search(work, player, depth, alpha, beta) {
+    nodes += 1;
+    if ((nodes & 511) === 0 && performance.now() - started > timeLimit) {
+      timedOut = true;
+      return 0;
+    }
+    let emptyCount = 0;
+    for (const value of work) if (value === EMPTY) emptyCount += 1;
+    if (emptyCount === 0) return terminal(work);
+    if (depth <= 0) return abEvaluate(work, size, komi);
+    const key = work.join('') + '|' + player + '|' + depth;
+    const cached = tt.get(key);
+    if (cached !== undefined) return cached;
+    const limit = emptyCount > 80 ? 6 : emptyCount > 40 ? 8 : 10;
+    const moves = abOrderMoves(work, size, player, limit);
+    const alphaOrig = alpha;
+    let best = player === WHITE ? -Infinity : Infinity;
+    for (const index of moves) {
+      work[index] = player;
+      const value = search(work, otherColor(player), depth - 1, alpha, beta);
+      work[index] = EMPTY;
+      if (timedOut) return best;
+      if (player === WHITE) {
+        if (value > best) best = value;
+        if (best > alpha) alpha = best;
+      } else {
+        if (value < best) best = value;
+        if (best < beta) beta = best;
+      }
+      if (alpha >= beta) break;
+    }
+    if (!timedOut && best > alphaOrig && best < beta) tt.set(key, best);
+    return best;
+  }
+  const rootMoves = abOrderMoves(board, size, color, Infinity);
+  if (!rootMoves.length) return -1;
+  for (let depth = 1; depth <= 4; depth += 1) {
+    let depthBest = -1;
+    let depthValue = color === WHITE ? -Infinity : Infinity;
+    for (const index of rootMoves) {
+      const work = board.slice();
+      work[index] = color;
+      const value = search(work, otherColor(color), depth - 1, -Infinity, Infinity);
+      if (timedOut) break;
+      if (color === WHITE ? value > depthValue : value < depthValue) {
+        depthValue = value;
+        depthBest = index;
+      }
+    }
+    if (timedOut) break;
+    if (depthBest >= 0) bestMove = depthBest;
+  }
+  return bestMove >= 0 ? bestMove : rootMoves[0];
+}
+
 function placeAiMove(index, color) {
   if (position[index] !== EMPTY) return false;
   position[index] = color;
@@ -935,7 +1055,7 @@ function placeAiMove(index, color) {
 function scheduleAiMove() {
   if (!aiMode || ended || aiThinking || turn === aiHumanColor) return;
   aiThinking = true;
-  updateAiStatus(aiLevel === 'mcts' ? 'MCTS 思考中…' : 'AI 思考中…');
+  updateAiStatus(aiLevel === 'ab' ? 'AB 思考中…' : aiLevel === 'mcts' ? 'MCTS 思考中…' : 'AI 思考中…');
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
     if (!aiMode || ended || turn === aiHumanColor) { aiThinking = false; return; }
@@ -945,9 +1065,11 @@ function scheduleAiMove() {
       const solved = solveExact(position, turn, source.size, 3000);
       if (solved.solved && solved.bestMove >= 0) index = solved.bestMove;
     }
-    if (index < 0) index = aiLevel === 'mcts' && empty <= 70
-      ? chooseMctsMove(position, source.size, turn)
-      : chooseAiMove(position, source.size, turn);
+    if (index < 0) {
+      if (aiLevel === 'ab') index = chooseAbMove(position, source.size, turn, source.komi, 320);
+      else if (aiLevel === 'mcts' && empty <= 70) index = chooseMctsMove(position, source.size, turn);
+      else index = chooseAiMove(position, source.size, turn);
+    }
     if (index >= 0) placeAiMove(index, turn);
     aiThinking = false;
     if (!ended) updateAiStatus(turn === aiHumanColor ? '轮到你' : 'AI 思考中…');
@@ -991,7 +1113,7 @@ function handleAiBoard(event) {
   const color = turn;
   if (!placeAiMove(index, color)) return;
   if (!ended) {
-    updateAiStatus(aiLevel === 'mcts' ? 'MCTS 思考中…' : 'AI 思考中…');
+    updateAiStatus(aiLevel === 'ab' ? 'AB 思考中…' : aiLevel === 'mcts' ? 'MCTS 思考中…' : 'AI 思考中…');
     scheduleAiMove();
   }
 }
