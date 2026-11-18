@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab17';
-import { chooseSearchMove } from './ab-search.js?v=lab17';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab18';
+import { chooseSearchMove } from './ab-search.js?v=lab18';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -1121,7 +1121,7 @@ function scheduleAiMove() {
       if (solved.solved && solved.bestMove >= 0) index = solved.bestMove;
     }
     if (index < 0) {
-      if (aiLevel === 'ab') index = chooseDeepAbMove(position, source.size, turn, source.komi, 1000);
+      if (aiLevel === 'ab') index = chooseDeepAbMove(position, source.size, turn, source.komi, 400);
       else if (aiLevel === 'mcts' && empty <= 70) index = chooseMctsMove(position, source.size, turn);
       else index = chooseAiMove(position, source.size, turn);
     }
