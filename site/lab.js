@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab28';
-import { chooseSearchMove } from './ab-search.js?v=lab28';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab29';
+import { chooseSearchMove } from './ab-search.js?v=lab29';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -1143,7 +1143,8 @@ function chooseEndgameMove(board, starter, size, komi) {
   const stats = remainingStats(board, size, starter);
   const simple = stats.activeMerges === 0 && stats.blackOnlyNew === 0 && stats.whiteOnlyNew === 0;
   if (simple || empty <= 26) {
-    const structured = solveStructured(board, starter, size, komi, 2500);
+    const budget = (simple || empty <= 20) ? 5000 : 2500;
+    const structured = solveStructured(board, starter, size, komi, budget);
     if (structured.solved) {
       if (structured.bestMove >= 0) return structured.bestMove;
       const neutral = isolatedNeutralPoints(board, size);
