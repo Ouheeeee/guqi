@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab21';
-import { chooseSearchMove } from './ab-search.js?v=lab21';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab24';
+import { chooseSearchMove } from './ab-search.js?v=lab24';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -416,7 +416,7 @@ function isolatedNeutralPoints(board, size) {
       else if (board[next] === BLACK) blackGroups.add(analysis.groupIndex[next]);
       else whiteGroups.add(analysis.groupIndex[next]);
     }
-    if (emptyNeighbors === 0 && blackGroups.size === 1 && whiteGroups.size === 1) out.push(index);
+    if (blackGroups.size === 1 && whiteGroups.size === 1) out.push(index);
   }
   return out;
 }
@@ -1109,13 +1109,20 @@ function chooseDeepAbMove(board, size, color, komi, timeLimit = 1000) {
 
 function chooseEndgameMove(board, starter, size, komi) {
   const empty = board.filter((value) => value === EMPTY).length;
+  if (empty === 0) return -1;
+  const stats = remainingStats(board, size, starter);
+  const simple = stats.activeMerges === 0 && stats.blackOnlyNew === 0 && stats.whiteOnlyNew === 0;
+  if (simple || empty <= 24) {
+    const structured = solveStructured(board, starter, size, komi, simple ? 2500 : 2000);
+    if (structured.solved) {
+      if (structured.bestMove >= 0) return structured.bestMove;
+      const neutral = isolatedNeutralPoints(board, size);
+      if (neutral.length > 0) return neutral[0];
+    }
+  }
   if (empty <= 18) {
     const exact = solveExact(board, starter, size, 3000);
     if (exact.solved && exact.bestMove >= 0) return exact.bestMove;
-  }
-  if (empty <= 20) {
-    const structured = solveStructured(board, starter, size, komi, 2000);
-    if (structured.solved && structured.bestMove >= 0) return structured.bestMove;
   }
   return -1;
 }
