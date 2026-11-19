@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab18';
-import { chooseSearchMove } from './ab-search.js?v=lab18';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab21';
+import { chooseSearchMove } from './ab-search.js?v=lab21';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -1107,6 +1107,19 @@ function chooseDeepAbMove(board, size, color, komi, timeLimit = 1000) {
   return chooseAbMove(board, size, color, komi, 320);
 }
 
+function chooseEndgameMove(board, starter, size, komi) {
+  const empty = board.filter((value) => value === EMPTY).length;
+  if (empty <= 18) {
+    const exact = solveExact(board, starter, size, 3000);
+    if (exact.solved && exact.bestMove >= 0) return exact.bestMove;
+  }
+  if (empty <= 20) {
+    const structured = solveStructured(board, starter, size, komi, 2000);
+    if (structured.solved && structured.bestMove >= 0) return structured.bestMove;
+  }
+  return -1;
+}
+
 function scheduleAiMove() {
   if (!aiMode || ended || aiThinking || turn === aiHumanColor) return;
   aiThinking = true;
@@ -1116,10 +1129,7 @@ function scheduleAiMove() {
     if (!aiMode || ended || turn === aiHumanColor) { aiThinking = false; return; }
     let index = -1;
     const empty = position.filter((value) => value === EMPTY).length;
-    if (empty <= 18) {
-      const solved = solveExact(position, turn, source.size, 3000);
-      if (solved.solved && solved.bestMove >= 0) index = solved.bestMove;
-    }
+    index = chooseEndgameMove(position, turn, source.size, source.komi);
     if (index < 0) {
       if (aiLevel === 'ab') index = chooseDeepAbMove(position, source.size, turn, source.komi, 400);
       else if (aiLevel === 'mcts' && empty <= 70) index = chooseMctsMove(position, source.size, turn);
@@ -1256,3 +1266,8 @@ dom.board.addEventListener('click', handleAiBoard);
 startDemo(Number(dom.demoSize.value) || 13);
 
 
+
+// 仅用于本地/线上调试，不影响 UI。
+if (typeof window !== 'undefined') {
+  window.__labDebug = { solveExact, solveStructured, chooseEndgameMove };
+}
