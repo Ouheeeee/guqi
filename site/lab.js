@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab26';
-import { chooseSearchMove } from './ab-search.js?v=lab26';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab28';
+import { chooseSearchMove } from './ab-search.js?v=lab28';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -421,13 +421,43 @@ function isolatedNeutralPoints(board, size) {
   return out;
 }
 
+function doubleNewPoints(board, size) {
+  const analysis = analyzeGroups(board, size);
+  const out = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    const row = Math.floor(index / size);
+    const col = index % size;
+    const adjacent = { [BLACK]: new Set(), [WHITE]: new Set() };
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = row + dr;
+      const nc = col + dc;
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+      const next = nr * size + nc;
+      if (board[next] === BLACK) adjacent[BLACK].add(analysis.groupIndex[next]);
+      else if (board[next] === WHITE) adjacent[WHITE].add(analysis.groupIndex[next]);
+    }
+    const blackDelta = adjacent[BLACK].size === 0 ? 1 : 1 - adjacent[BLACK].size;
+    const whiteDelta = adjacent[WHITE].size === 0 ? 1 : 1 - adjacent[WHITE].size;
+    if (blackDelta === 1 && whiteDelta === 1) out.push(index);
+  }
+  return out;
+}
+
 function solveStructured(board, starter, size, komi, timeLimit = 5000) {
   const work = board.slice();
   const isolated = isolatedNeutralPoints(board, size);
   const isolatedSet = new Set(isolated);
+  const doubles = doubleNewPoints(board, size);
+  const pairedDoubles = new Set();
+  for (let i = 0; i + 1 < doubles.length; i += 2) {
+    pairedDoubles.add(doubles[i]);
+    pairedDoubles.add(doubles[i + 1]);
+  }
+  const skip = new Set([...isolatedSet, ...pairedDoubles]);
   const residual = [];
   for (let index = 0; index < board.length; index += 1) {
-    if (board[index] === EMPTY && !isolatedSet.has(index)) residual.push(index);
+    if (board[index] === EMPTY && !skip.has(index)) residual.push(index);
   }
   const started = performance.now();
   const tt = new Map();
@@ -1112,8 +1142,8 @@ function chooseEndgameMove(board, starter, size, komi) {
   if (empty === 0) return -1;
   const stats = remainingStats(board, size, starter);
   const simple = stats.activeMerges === 0 && stats.blackOnlyNew === 0 && stats.whiteOnlyNew === 0;
-  if (simple || empty <= 24) {
-    const structured = solveStructured(board, starter, size, komi, simple ? 2500 : 2000);
+  if (simple || empty <= 26) {
+    const structured = solveStructured(board, starter, size, komi, 2500);
     if (structured.solved) {
       if (structured.bestMove >= 0) return structured.bestMove;
       const neutral = isolatedNeutralPoints(board, size);
@@ -1276,5 +1306,5 @@ startDemo(Number(dom.demoSize.value) || 13);
 
 // 仅用于本地/线上调试，不影响 UI。
 if (typeof window !== 'undefined') {
-  window.__labDebug = { solveExact, solveStructured, chooseEndgameMove };
+  window.__labDebug = { solveExact, solveStructured, chooseEndgameMove, remainingStats, isolatedNeutralPoints, doubleNewPoints, countEmpty };
 }
