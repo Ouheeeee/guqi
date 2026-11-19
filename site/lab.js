@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab24';
-import { chooseSearchMove } from './ab-search.js?v=lab24';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab26';
+import { chooseSearchMove } from './ab-search.js?v=lab26';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
@@ -465,7 +465,7 @@ function solveStructured(board, starter, size, komi, timeLimit = 5000) {
       return 0;
     }
     if (!remaining.length) return terminal();
-    const key = work.join('') + '|' + remaining.join(',') + '|' + player + '|' + passes;
+    const key = work.join('') + '|' + player + '|' + passes;
     const cached = tt.get(key);
     if (cached !== undefined) return cached;
     const ordered = order(player);
