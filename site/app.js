@@ -25,7 +25,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.6';
+} from './game.js?v=1.9.7';
 import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,
@@ -81,6 +81,7 @@ const dom = {
   analysisMeta: document.querySelector('#analysisMeta'),
   analysisWinbar: document.querySelector('#analysisWinbar'),
   analysisBarBlack: document.querySelector('#analysisBarBlack'),
+  analysisBarDraw: document.querySelector('#analysisBarDraw'),
   analysisBarWhite: document.querySelector('#analysisBarWhite'),
   tryBtn: document.querySelector('#tryBtn'),
   tryBtnText: document.querySelector('#tryBtnText'),
@@ -381,7 +382,7 @@ function renderStatus() {
     dom.statusTitle.textContent = `轮到${colorName(game.turn)}落子`;
     dom.statusSub.textContent = `第 ${game.history.length + 1} 手 · ${komiRuleText(game.komi)}。`;
   } else if (phase === 'ended') {
-    dom.turnStone.classList.add(game.result?.winner === WHITE ? 'is-white' : 'is-black');
+    dom.turnStone.classList.add(game.result?.isDraw ? 'is-draw' : game.result?.winner === WHITE ? 'is-white' : 'is-black');
     dom.statusTitle.textContent = resultLabel(game.result);
     dom.statusSub.textContent = resultDescription(game.result);
   } else {
@@ -648,7 +649,7 @@ function renderResultContent() {
           ? '贴间同数'
           : '棋枰已满';
   dom.resultKicker.textContent = `对局 ${activeNumber()} · 终局 · ${reason}`;
-  dom.resultStone.className = `result-stone ${result.winner === BLACK ? 'is-black' : 'is-white'}`;
+  dom.resultStone.className = `result-stone ${result.isDraw ? 'is-draw' : result.winner === BLACK ? 'is-black' : 'is-white'}`;
   dom.resultTitle.textContent = title;
   dom.resultDesc.textContent = resultDescription(result);
   dom.modalBlackScore.textContent = String(result.scores.black);
@@ -1184,17 +1185,20 @@ async function handleAnalyze() {
     const result = analyzePosition(board, turn, game.size, game.komi, { exactLimit: 2500, estimateLimit: 1200 });
     dom.analysisBody.hidden = false;
     if (result.kind === 'exact') {
-      const winner = result.winner === BLACK ? '黑胜' : '白胜';
+      const draw = result.isDraw || result.winner === null;
+      const label = draw ? '平局' : result.winner === BLACK ? '黑胜' : '白胜';
       const margin = typeof result.margin === 'number' ? formatNumber(result.margin) : '0';
-      dom.analysisVerdict.innerHTML = `<strong>官子已定</strong> · ${winner}，${margin === '0' ? '同数白胜' : `领先 ${margin} 间`}`;
+      dom.analysisVerdict.innerHTML = `<strong>官子已定</strong> · ${label}${draw ? '' : `，领先 ${margin} 间`}`;
       dom.analysisWinbar.hidden = true;
       dom.analysisMeta.textContent = `精确搜索 · ${result.empty} 空点 · ${Math.round(result.ms)} ms · ${Number(result.nodes || 0).toLocaleString()} 节点`;
     } else {
       const blackPct = Math.round(result.blackRate * 100);
-      const whitePct = 100 - blackPct;
-      dom.analysisVerdict.innerHTML = `<strong>模拟胜率</strong> · 黑 ${blackPct}% / 白 ${whitePct}%`;
+      const drawPct = Math.round(result.drawRate * 100);
+      const whitePct = Math.max(0, 100 - blackPct - drawPct);
+      dom.analysisVerdict.innerHTML = `<strong>模拟胜率</strong> · 黑 ${blackPct}% / 平 ${drawPct}% / 白 ${whitePct}%`;
       dom.analysisWinbar.hidden = false;
       dom.analysisBarBlack.style.width = `${blackPct}%`;
+      dom.analysisBarDraw.style.width = `${drawPct}%`;
       dom.analysisBarWhite.style.width = `${whitePct}%`;
       dom.analysisMeta.textContent = `${result.empty} 空点 · ${result.samples} 局弱策略模拟 · 非精确，仅供方向参考`;
     }

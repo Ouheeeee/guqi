@@ -8,7 +8,7 @@ import {
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.9.6';
+} from './game.js?v=1.9.7';
 import {
   accountUrl,
   initAccountLink,

@@ -421,24 +421,26 @@ export function adjustedScores(scores, komi = DEFAULT_KOMI) {
 
 /**
  * 按先手贴间规则判定胜负。
- * 原始间数相同，或黑方加贴后与白方相同，均由白方获胜。
+ * 贴间后间数相同为平局。
  */
 export function judgeScores(scores, komi = DEFAULT_KOMI) {
   const value = requireKomi(komi);
   const adjusted = adjustedScores(scores, value);
   const rawTie = scores.black === scores.white;
   const handicapTie = !rawTie && adjusted.black === adjusted.white;
-  const winner = adjusted.black < adjusted.white ? BLACK : WHITE;
+  const isDraw = adjusted.black === adjusted.white;
+  const winner = isDraw ? null : adjusted.black < adjusted.white ? BLACK : WHITE;
 
   return {
     winner,
-    loser: otherColor(winner),
+    loser: isDraw ? null : otherColor(winner),
     scores: { black: scores.black, white: scores.white },
     komi: value,
     adjustedScores: adjusted,
     rawTie,
     handicapTie,
-    isTie: rawTie || handicapTie,
+    isDraw,
+    isTie: isDraw,
   };
 }
 
@@ -594,47 +596,22 @@ export function remainingCells(game) {
 
 export function resultLabel(result) {
   if (!result) return '';
-  if (result.reason === 'board-full' || result.reason === 'settle') {
-    if (result.rawTie) return '白胜因平局';
-    if (result.handicapTie) return '白胜因贴间';
-  }
+  if (result.isDraw) return '平局';
   return result.winner === BLACK ? '黑胜' : '白胜';
 }
 
 export function resultDescription(result) {
   if (!result) return '';
-
   const komiRule = komiRuleText(result.komi);
-  const noKomi = Number(result.komi) === 0;
   if (result.reason === 'resign') {
     return `${colorName(result.loser)}认输，${colorName(result.winner)}直接获胜。`;
   }
-
+  if (result.isDraw) {
+    return `${result.reason === 'settle' ? '按当前孤棋数结算：' : ''}${komiRule}后，双方同为 ${formatNumber(result.adjustedScores.black)} 间；平局。`;
+  }
   if (result.reason === 'settle') {
-    if (result.rawTie) {
-      return noKomi
-        ? `按当前孤棋数结算：黑白原始间数同为 ${result.scores.black} 间；后手白方胜。`
-        : `按当前孤棋数结算：黑白原始间数同为 ${result.scores.black} 间；按${komiRule}规则，后手白方胜。`;
-    }
-    if (result.handicapTie) {
-      return `按当前孤棋数结算：${komiRule}后，双方同为 ${formatNumber(result.adjustedScores.black)} 间；依规后手白方获胜。`;
-    }
-    return noKomi
-      ? `按当前孤棋数结算：黑方 ${result.scores.black} 间、白方 ${result.scores.white} 间；${colorName(result.winner)}胜出。`
-      : `按当前孤棋数结算：黑方 ${result.scores.black} 间、白方 ${result.scores.white} 间；${komiRule}后，${colorName(result.winner)}胜出。`;
+    return `按当前孤棋数结算：${komiRule}后，黑方 ${formatNumber(result.adjustedScores.black)} 间、白方 ${formatNumber(result.adjustedScores.white)} 间；${colorName(result.winner)}胜出。`;
   }
-
-  if (result.rawTie) {
-    return noKomi
-      ? `双方原始间数同为 ${result.scores.black} 间；后手白方胜。`
-      : `双方原始间数同为 ${result.scores.black} 间；按${komiRule}规则，后手白方胜。`;
-  }
-
-  if (result.handicapTie) {
-    return `${komiRule}后，双方同为 ${formatNumber(result.adjustedScores.black)} 间；依规后手白方获胜。`;
-  }
-
-  return noKomi
-    ? `黑方 ${formatNumber(result.adjustedScores.black)} 间、白方 ${formatNumber(result.adjustedScores.white)} 间；${colorName(result.winner)}胜出。`
-    : `${komiRule}后，黑方 ${formatNumber(result.adjustedScores.black)} 间、白方 ${formatNumber(result.adjustedScores.white)} 间；${colorName(result.winner)}胜出。`;
+  return `${komiRule}后，黑方 ${formatNumber(result.adjustedScores.black)} 间、白方 ${formatNumber(result.adjustedScores.white)} 间；${colorName(result.winner)}胜出。`;
 }
+

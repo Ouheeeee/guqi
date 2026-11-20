@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.9.6">
+  <link rel="stylesheet" href="./styles.css?v=1.9.7">
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true" width="0" height="0">
@@ -185,6 +185,7 @@
           <p class="analysis-verdict" id="analysisVerdict"></p>
           <div class="analysis-bar" id="analysisWinbar" hidden>
             <span class="analysis-bar-black" id="analysisBarBlack"></span>
+            <span class="analysis-bar-draw" id="analysisBarDraw"></span>
             <span class="analysis-bar-white" id="analysisBarWhite"></span>
           </div>
           <p class="analysis-meta" id="analysisMeta"></p>
@@ -276,7 +277,7 @@
           </li>
           <li>
             <span class="rule-no">03</span>
-            <p><strong>终局</strong>填满后按贴间后间数少者胜；同数白胜。</p>
+            <p><strong>终局</strong>填满后按贴间后间数少者胜；同数为平局。</p>
           </li>
           <li>
             <span class="rule-no">04</span>
@@ -341,6 +342,6 @@
     </section>
   </div>
 
-  <script type="module" src="./app.js?v=1.9.6"></script>
+  <script type="module" src="./app.js?v=1.9.7"></script>
 </body>
 </html>

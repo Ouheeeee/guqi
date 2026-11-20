@@ -2618,3 +2618,6 @@ body.board-immersive .immersive-exit {
 .analysis-bar-black { background: #d7d2c5; transition: width .25s ease; }
 .analysis-bar-white { background: #7c7c7c; transition: width .25s ease; }
 .analysis-meta { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted, #9c988e); }
+
+.analysis-bar-draw { background: #b08a5a; transition: width .25s ease; }
+.turn-stone.is-draw, .result-stone.is-draw { background: linear-gradient(90deg, #d7d2c5 50%, #7c7c7c 50%); }

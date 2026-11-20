@@ -1,4 +1,4 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.6';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.7';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);
@@ -127,7 +127,7 @@ function solveStructured(board, starter, size, komi, timeLimit) {
   }
 
   const score = search(starter, residual, neutral.length, -Infinity, Infinity, 0);
-  return { solved: !timedOut, score, winner: score < 0 ? BLACK : WHITE, margin: Math.abs(score), bestMove: timedOut ? -1 : bestMove, nodes, ms: performance.now() - started, empty: countEmpty(board) };
+  return { solved: !timedOut, score, winner: score === 0 ? null : score < 0 ? BLACK : WHITE, isDraw: score === 0, margin: Math.abs(score), bestMove: timedOut ? -1 : bestMove, nodes, ms: performance.now() - started, empty: countEmpty(board) };
 }
 
 function chooseRolloutMove(board, size, color) {
@@ -157,6 +157,8 @@ function estimateWinRate(board, starter, size, komi, timeLimit) {
   const started = performance.now();
   let samples = 0;
   let blackWins = 0;
+  let whiteWins = 0;
+  let draws = 0;
   const deadline = started + timeLimit;
   while (performance.now() < deadline) {
     const copy = board.slice();
@@ -172,8 +174,16 @@ function estimateWinRate(board, starter, size, komi, timeLimit) {
     const result = judgeScores({ black: analysis.black, white: analysis.white }, komi);
     samples += 1;
     if (result.winner === BLACK) blackWins += 1;
+    else if (result.winner === WHITE) whiteWins += 1;
+    else draws += 1;
   }
-  return { samples, blackRate: samples ? blackWins / samples : 0, ms: performance.now() - started };
+  return {
+    samples,
+    blackRate: samples ? blackWins / samples : 0,
+    whiteRate: samples ? whiteWins / samples : 0,
+    drawRate: samples ? draws / samples : 0,
+    ms: performance.now() - started,
+  };
 }
 
 export function analyzePosition(board, starter, size, komi, options = {}) {
@@ -181,7 +191,7 @@ export function analyzePosition(board, starter, size, komi, options = {}) {
   if (empty === 0) {
     const analysis = analyzeGroups(board, size);
     const result = judgeScores({ black: analysis.black, white: analysis.white }, komi);
-    return { kind: 'exact', winner: result.winner, margin: Math.abs(result.adjustedScores.black - result.adjustedScores.white), empty: 0, ms: 0 };
+    return { kind: 'exact', winner: result.winner, isDraw: result.isDraw, margin: Math.abs(result.adjustedScores.black - result.adjustedScores.white), empty: 0, ms: 0 };
   }
   const exactLimit = options.exactLimit ?? 2500;
   if (empty <= 26) {
