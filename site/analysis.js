@@ -1,4 +1,4 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.4';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.5';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);
