@@ -9,8 +9,8 @@ import {
   formatNumber,
   judgeScores,
 } from './game.js?v=1.9.3';
-import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab31';
-import { chooseSearchMove } from './ab-search.js?v=lab31';
+import { findSecondLineEyeShapes, describeEyeShape } from './eye-model.js?v=lab32';
+import { chooseSearchMove } from './ab-search.js?v=lab32';
 
 const $ = (selector) => document.querySelector(selector);
 const dom = {
