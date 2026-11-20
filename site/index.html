@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <title>孤棋 · 双人同屏对战</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.9.3">
+  <link rel="stylesheet" href="./styles.css?v=1.9.4">
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true" width="0" height="0">
@@ -173,6 +173,24 @@
         <p class="panel-foot" id="scoreFoot">预设布局 · 黑 6 子 / 白 6 子</p>
       </section>
 
+      <section class="panel analysis-panel" id="analysisPanel" aria-labelledby="analysisHeading">
+        <div class="panel-head">
+          <h2 id="analysisHeading">局面评估</h2>
+          <span class="panel-kicker">ANALYSIS</span>
+        </div>
+        <button type="button" class="btn btn-soft action-wide" id="analyzeBtn" title="评估当前局面：能精确算清就显示官子结果，否则显示模拟胜率">
+          <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>评估局面
+        </button>
+        <div class="analysis-body" id="analysisBody" hidden>
+          <p class="analysis-verdict" id="analysisVerdict"></p>
+          <div class="analysis-bar" id="analysisWinbar" hidden>
+            <span class="analysis-bar-black" id="analysisBarBlack"></span>
+            <span class="analysis-bar-white" id="analysisBarWhite"></span>
+          </div>
+          <p class="analysis-meta" id="analysisMeta"></p>
+        </div>
+      </section>
+
       <section class="panel actions-panel" aria-labelledby="actionsHeading">
         <div class="panel-head">
           <h2 id="actionsHeading">对局操作</h2>
@@ -323,6 +341,6 @@
     </section>
   </div>
 
-  <script type="module" src="./app.js?v=1.9.3"></script>
+  <script type="module" src="./app.js?v=1.9.4"></script>
 </body>
 </html>

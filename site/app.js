@@ -26,6 +26,7 @@ import {
   undoMove,
   colorName,
 } from './game.js?v=1.9.3';
+import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,
   getSavedGame,
@@ -74,6 +75,13 @@ const dom = {
   undoBtn: document.querySelector('#undoBtn'),
   resignBtn: document.querySelector('#resignBtn'),
   settleBtn: document.querySelector('#settleBtn'),
+  analyzeBtn: document.querySelector('#analyzeBtn'),
+  analysisBody: document.querySelector('#analysisBody'),
+  analysisVerdict: document.querySelector('#analysisVerdict'),
+  analysisMeta: document.querySelector('#analysisMeta'),
+  analysisWinbar: document.querySelector('#analysisWinbar'),
+  analysisBarBlack: document.querySelector('#analysisBarBlack'),
+  analysisBarWhite: document.querySelector('#analysisBarWhite'),
   tryBtn: document.querySelector('#tryBtn'),
   tryBtnText: document.querySelector('#tryBtnText'),
   tryPreviewBox: document.querySelector('#tryPreviewBox'),
@@ -1163,6 +1171,45 @@ dom.regenerateBtn.addEventListener('click', handleRegenerate);
 dom.undoBtn.addEventListener('click', handleUndo);
 dom.resignBtn.addEventListener('click', handleResign);
 dom.settleBtn.addEventListener('click', handleSettle);
+async function handleAnalyze() {
+  if (!game) return;
+  const button = dom.analyzeBtn;
+  button.disabled = true;
+  button.textContent = '计算中…';
+  dom.analysisBody.hidden = true;
+  await new Promise((resolve) => window.setTimeout(resolve, 20));
+  try {
+    const board = tryMode ? tryBoard() : game.board;
+    const turn = tryMode ? nextTryColor() : game.turn;
+    const result = analyzePosition(board, turn, game.size, game.komi, { exactLimit: 2500, estimateLimit: 1200 });
+    dom.analysisBody.hidden = false;
+    if (result.kind === 'exact') {
+      const winner = result.winner === BLACK ? '黑胜' : '白胜';
+      const margin = typeof result.margin === 'number' ? formatNumber(result.margin) : '0';
+      dom.analysisVerdict.innerHTML = `<strong>官子已定</strong> · ${winner}，${margin === '0' ? '同数白胜' : `领先 ${margin} 间`}`;
+      dom.analysisWinbar.hidden = true;
+      dom.analysisMeta.textContent = `精确搜索 · ${result.empty} 空点 · ${Math.round(result.ms)} ms · ${Number(result.nodes || 0).toLocaleString()} 节点`;
+    } else {
+      const blackPct = Math.round(result.blackRate * 100);
+      const whitePct = 100 - blackPct;
+      dom.analysisVerdict.innerHTML = `<strong>模拟胜率</strong> · 黑 ${blackPct}% / 白 ${whitePct}%`;
+      dom.analysisWinbar.hidden = false;
+      dom.analysisBarBlack.style.width = `${blackPct}%`;
+      dom.analysisBarWhite.style.width = `${whitePct}%`;
+      dom.analysisMeta.textContent = `${result.empty} 空点 · ${result.samples} 局弱策略模拟 · 非精确，仅供方向参考`;
+    }
+  } catch (error) {
+    dom.analysisBody.hidden = false;
+    dom.analysisVerdict.textContent = '评估失败';
+    dom.analysisMeta.textContent = error?.message || String(error);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>评估局面';
+  }
+}
+
+dom.analyzeBtn.addEventListener('click', handleAnalyze);
+
 dom.tryBtn.addEventListener('click', () => setTryMode(!tryMode));
 dom.tryUndoBtn.addEventListener('click', undoTryMove);
 dom.tryResetBtn.addEventListener('click', resetTryMoves);

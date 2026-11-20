@@ -2608,3 +2608,13 @@ body.board-immersive .immersive-exit {
 .try-preview-actions {
   grid-template-columns: repeat(3, 1fr);
 }
+
+/* 局面评估面板 */
+.analysis-panel .action-wide { width: 100%; justify-content: center; }
+.analysis-body { margin-top: 10px; display: grid; gap: 8px; }
+.analysis-verdict { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text, #e8e4da); }
+.analysis-verdict strong { color: #f1c56b; }
+.analysis-bar { display: flex; height: 8px; overflow: hidden; border-radius: 999px; background: #3a3a3a; }
+.analysis-bar-black { background: #d7d2c5; transition: width .25s ease; }
+.analysis-bar-white { background: #7c7c7c; transition: width .25s ease; }
+.analysis-meta { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted, #9c988e); }
