@@ -5,7 +5,7 @@
  *   0 = 空位，1 = 黑棋，2 = 白棋
  * 黑方先行，终局以“间”（连通块数）少者获胜。
  * 先手黑方按规则贴 0.5 / 1 间，或后手白方贴 0.5 间；再比较双方调整后的间数；
- * 贴目后同数或原始间数相同，均由后手白方获胜。
+ * 贴间后同数或原始间数相同，均由后手白方获胜。
  */
 
 export const EMPTY = 0;
@@ -420,7 +420,7 @@ export function adjustedScores(scores, komi = DEFAULT_KOMI) {
 }
 
 /**
- * 按先手贴目规则判定胜负。
+ * 按先手贴间规则判定胜负。
  * 原始间数相同，或黑方加贴后与白方相同，均由白方获胜。
  */
 export function judgeScores(scores, komi = DEFAULT_KOMI) {
@@ -596,7 +596,7 @@ export function resultLabel(result) {
   if (!result) return '';
   if (result.reason === 'board-full' || result.reason === 'settle') {
     if (result.rawTie) return '白胜因平局';
-    if (result.handicapTie) return '白胜因贴目';
+    if (result.handicapTie) return '白胜因贴间';
   }
   return result.winner === BLACK ? '黑胜' : '白胜';
 }

@@ -8,7 +8,7 @@ import {
   coordinateLabel,
   resultLabel,
   resultDescription,
-} from './game.js?v=1.9.3';
+} from './game.js?v=1.9.6';
 import {
   accountUrl,
   initAccountLink,
@@ -531,8 +531,8 @@ function renderPending() {
       : '对方请求按当前孤棋数立即结算，是否同意？';
   } else {
     const requestText = Number(pending.value) === 0
-      ? '取消先手贴目'
-      : `将先手贴目调整为 ${formatNumber(pending.value)} 间`;
+      ? '取消先手贴间'
+      : `将先手贴间调整为 ${formatNumber(pending.value)} 间`;
     dom.pendingText.textContent = byYou
       ? `你已申请${requestText}，等待对方确认。`
       : `对方申请${requestText}，是否同意？`;
@@ -543,7 +543,7 @@ function renderPending() {
 
   const key = `${pending.kind}:${pending.by}:${pending.value ?? ''}`;
   if (lastPendingKey !== key && !byYou) {
-    showToast(isUndo ? '对方发来悔棋请求' : isSettle ? '对方发来立即结算请求' : '对方发来贴目变更请求');
+    showToast(isUndo ? '对方发来悔棋请求' : isSettle ? '对方发来立即结算请求' : '对方发来贴间变更请求');
   }
   lastPendingKey = key;
 }
@@ -678,7 +678,7 @@ function renderRoom() {
   if (room.phase === 'ended') {
     dom.onlineResultTitle.textContent = resultLabel(room.result);
     dom.onlineResultDesc.textContent = resultDescription(room.result);
-    dom.onlineResultKomi.textContent = `${komiRuleText(room.result.komi)} · 贴目后 黑 ${formatNumber(room.result.adjustedScores.black)} / 白 ${formatNumber(room.result.adjustedScores.white)} 间`;
+    dom.onlineResultKomi.textContent = `${komiRuleText(room.result.komi)} · 贴间后 黑 ${formatNumber(room.result.adjustedScores.black)} / 白 ${formatNumber(room.result.adjustedScores.white)} 间`;
   }
 
   const yourTurn = room.phase === 'playing' && room.turn === room.youColor;
@@ -890,7 +890,7 @@ function bindEvents() {
   dom.rejectPendingBtn.addEventListener('click', () => respondPending(false));
   for (const button of dom.komiRequestButtons) {
     button.addEventListener('click', () => {
-      sendAction({ type: 'request-komi', value: Number(button.dataset.komiRequest) }, '已发送贴目变更请求');
+      sendAction({ type: 'request-komi', value: Number(button.dataset.komiRequest) }, '已发送贴间变更请求');
       pollAfterAction();
     });
   }

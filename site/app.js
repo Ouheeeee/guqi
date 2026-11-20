@@ -25,7 +25,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.3';
+} from './game.js?v=1.9.6';
 import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,
@@ -645,7 +645,7 @@ function renderResultContent() {
       : result.rawTie
         ? '平局裁定'
         : result.handicapTie
-          ? '贴目同数'
+          ? '贴间同数'
           : '棋枰已满';
   dom.resultKicker.textContent = `对局 ${activeNumber()} · 终局 · ${reason}`;
   dom.resultStone.className = `result-stone ${result.winner === BLACK ? 'is-black' : 'is-white'}`;
@@ -653,7 +653,7 @@ function renderResultContent() {
   dom.resultDesc.textContent = resultDescription(result);
   dom.modalBlackScore.textContent = String(result.scores.black);
   dom.modalWhiteScore.textContent = String(result.scores.white);
-  dom.resultKomi.textContent = `${komiRuleText(result.komi)} · 贴目后 黑 ${formatNumber(result.adjustedScores.black)} / 白 ${formatNumber(result.adjustedScores.white)} 间`;
+  dom.resultKomi.textContent = `${komiRuleText(result.komi)} · 贴间后 黑 ${formatNumber(result.adjustedScores.black)} / 白 ${formatNumber(result.adjustedScores.white)} 间`;
 
   const atLimit = matches.length >= MAX_MATCHES;
   dom.modalNewBtn.disabled = atLimit;
@@ -881,7 +881,7 @@ function normalizeSavedState(state) {
   if (!state || !BOARD_SIZES.includes(Number(state.size))) throw new Error('存档格式不受支持');
   const size = Number(state.size);
   if (!Array.isArray(state.board) || state.board.length !== size * size) throw new Error('存档棋盘不完整');
-  if (!KOMI_OPTIONS.includes(Number(state.komi))) throw new Error('存档贴目无效');
+  if (!KOMI_OPTIONS.includes(Number(state.komi))) throw new Error('存档贴间无效');
   return {
     size,
     komi: Number(state.komi),
