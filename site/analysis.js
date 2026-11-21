@@ -1,5 +1,5 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.11';
-import { chooseSearchMove } from './ab-search.js?v=1.9.11';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.12';
+import { chooseSearchMove } from './ab-search.js?v=1.9.12';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);

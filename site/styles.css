@@ -76,7 +76,7 @@ button {
   color: inherit;
 }
 
-button:focus-visible,
+button:not(.cell):focus-visible,
 summary:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--ink);
@@ -777,8 +777,12 @@ h1 {
   }
 }
 
+.cell:focus {
+  outline: none;
+}
+
 .board.is-playing .cell:not(.occupied):focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid rgba(201, 162, 39, 0.9);
   outline-offset: -3px;
   z-index: 8;
 }
