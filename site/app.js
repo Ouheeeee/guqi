@@ -25,7 +25,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.10';
+} from './game.js?v=1.9.11';
 import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,
@@ -1188,34 +1188,29 @@ async function handleAnalyze() {
     const result = analyzePosition(board, turn, game.size, game.komi, { exactLimit: 2500, estimateLimit: 1200 });
     dom.analysisBody.hidden = false;
     if (result.kind === 'hybrid') {
-      const best = result.abCandidates[0];
       const blackPct = Math.round(result.blackRate * 100);
       const drawPct = Math.round(result.drawRate * 100);
       const whitePct = Math.max(0, 100 - blackPct - drawPct);
-      dom.analysisVerdict.innerHTML = `<strong>AB 最佳</strong> · ${coordinateLabel(best.index, game.size)} <span class="analysis-rate">黑 ${blackPct}% · 平 ${drawPct}% · 白 ${whitePct}%</span>`;
+      dom.analysisVerdict.innerHTML = `<strong>黑 ${blackPct}% · 平 ${drawPct}% · 白 ${whitePct}%</strong>`;
       dom.analysisWinbar.hidden = false;
       dom.analysisBarBlack.style.width = `${blackPct}%`;
       dom.analysisBarDraw.style.width = `${drawPct}%`;
       dom.analysisBarWhite.style.width = `${whitePct}%`;
       dom.analysisCandidates.replaceChildren();
-      const title = document.createElement('p');
-      title.className = 'analysis-candidates-title';
-      title.textContent = 'AB 选点 · 前 3';
-      dom.analysisCandidates.append(title);
       for (const [index, candidate] of result.abCandidates.entries()) {
         const row = document.createElement('div');
         row.className = 'analysis-candidate';
         const move = document.createElement('b');
         move.textContent = coordinateLabel(candidate.index, game.size);
         const score = document.createElement('span');
-        score.textContent = `评分 ${candidate.score > 0 ? '+' : ''}${formatNumber(candidate.score)} 间`;
+        score.textContent = `${candidate.score > 0 ? '+' : ''}${formatNumber(candidate.score)} 间`;
         const depth = document.createElement('em');
-        depth.textContent = `深度 ${candidate.depth} · #${index + 1}`;
+        depth.textContent = `#${index + 1} · 深 ${candidate.depth}`;
         row.append(move, score, depth);
         dom.analysisCandidates.append(row);
       }
       dom.analysisCandidates.hidden = false;
-      dom.analysisMeta.textContent = `5 秒 AB 选点 · ${result.samples} 局弱策略模拟胜率 · 非精确`;
+      dom.analysisMeta.textContent = `${(result.abMs / 1000).toFixed(1)}s · ${Number(result.abNodes || 0).toLocaleString()} 节点 · 前 ${result.abCandidates.length}/${result.abRootCount}`;
     } else if (result.kind === 'ab') {
       const move = result.move >= 0 ? coordinateLabel(result.move, game.size) : '无';
       const score = Number(result.score || 0);
@@ -1228,10 +1223,10 @@ async function handleAnalyze() {
       const draw = result.isDraw || result.winner === null;
       const label = draw ? '平局' : result.winner === BLACK ? '黑胜' : '白胜';
       const margin = typeof result.margin === 'number' ? formatNumber(result.margin) : '0';
-      dom.analysisVerdict.innerHTML = `<strong>官子已定</strong> · ${label}${draw ? '' : `，领先 ${margin} 间`}`;
+      dom.analysisVerdict.innerHTML = `<strong>${label}${draw ? '' : ` +${margin} 间`}</strong>`;
       dom.analysisWinbar.hidden = true;
       dom.analysisCandidates.hidden = true;
-      dom.analysisMeta.textContent = `精确搜索 · ${result.empty} 空点 · ${Math.round(result.ms)} ms · ${Number(result.nodes || 0).toLocaleString()} 节点`;
+      dom.analysisMeta.textContent = `精确 · ${result.empty} 空 · ${Math.round(result.ms)}ms`;
     } else {
       const blackPct = Math.round(result.blackRate * 100);
       const drawPct = Math.round(result.drawRate * 100);

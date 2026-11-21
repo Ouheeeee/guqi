@@ -1,5 +1,5 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.10';
-import { chooseSearchMove } from './ab-search.js?v=1.9.10';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.11';
+import { chooseSearchMove } from './ab-search.js?v=1.9.11';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);
@@ -235,6 +235,7 @@ function analyzeAbCandidates(board, starter, size, komi, timeLimit) {
   const roots = rootCandidates(board, size, starter).slice(0, 6);
   const perMove = Math.max(300, Math.floor(timeLimit / Math.max(1, roots.length)));
   const out = [];
+  let totalNodes = 0;
   for (const root of roots) {
     const next = board.slice();
     next[root.index] = starter;
@@ -246,6 +247,7 @@ function analyzeAbCandidates(board, starter, size, komi, timeLimit) {
         maxDepth: 12,
         ttBits: 16,
       });
+      totalNodes += Number(result.nodes || 0);
       out.push({
         index: root.index,
         score: -result.score / 1000,
@@ -257,7 +259,7 @@ function analyzeAbCandidates(board, starter, size, komi, timeLimit) {
     }
   }
   out.sort((a, b) => b.score - a.score);
-  return { candidates: out.slice(0, 3), ms: performance.now() - started, perMove };
+  return { candidates: out.slice(0, 3), ms: performance.now() - started, perMove, totalNodes, rootCount: roots.length };
 }
 
 
@@ -283,6 +285,8 @@ export function analyzePosition(board, starter, size, komi, options = {}) {
     kind: 'hybrid',
     abCandidates: ab.candidates,
     abMs: ab.ms,
+    abNodes: ab.totalNodes,
+    abRootCount: ab.rootCount,
     ...estimate,
     blackRate: estimate.best.blackRate,
     whiteRate: estimate.best.whiteRate,
