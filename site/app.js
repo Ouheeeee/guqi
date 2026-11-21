@@ -25,7 +25,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.7';
+} from './game.js?v=1.9.8';
 import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,
@@ -83,6 +83,7 @@ const dom = {
   analysisBarBlack: document.querySelector('#analysisBarBlack'),
   analysisBarDraw: document.querySelector('#analysisBarDraw'),
   analysisBarWhite: document.querySelector('#analysisBarWhite'),
+  analysisCandidates: document.querySelector('#analysisCandidates'),
   tryBtn: document.querySelector('#tryBtn'),
   tryBtnText: document.querySelector('#tryBtnText'),
   tryPreviewBox: document.querySelector('#tryPreviewBox'),
@@ -1178,6 +1179,8 @@ async function handleAnalyze() {
   button.disabled = true;
   button.textContent = '计算中…';
   dom.analysisBody.hidden = true;
+  dom.analysisCandidates.hidden = true;
+  dom.analysisCandidates.replaceChildren();
   await new Promise((resolve) => window.setTimeout(resolve, 20));
   try {
     const board = tryMode ? tryBoard() : game.board;
@@ -1190,6 +1193,7 @@ async function handleAnalyze() {
       const margin = typeof result.margin === 'number' ? formatNumber(result.margin) : '0';
       dom.analysisVerdict.innerHTML = `<strong>官子已定</strong> · ${label}${draw ? '' : `，领先 ${margin} 间`}`;
       dom.analysisWinbar.hidden = true;
+      dom.analysisCandidates.hidden = true;
       dom.analysisMeta.textContent = `精确搜索 · ${result.empty} 空点 · ${Math.round(result.ms)} ms · ${Number(result.nodes || 0).toLocaleString()} 节点`;
     } else {
       const blackPct = Math.round(result.blackRate * 100);
@@ -1200,7 +1204,25 @@ async function handleAnalyze() {
       dom.analysisBarBlack.style.width = `${blackPct}%`;
       dom.analysisBarDraw.style.width = `${drawPct}%`;
       dom.analysisBarWhite.style.width = `${whitePct}%`;
-      dom.analysisMeta.textContent = `${result.empty} 空点 · ${result.samples} 局弱策略模拟 · 非精确，仅供方向参考`;
+      dom.analysisMeta.textContent = `${result.empty} 空点 · ${result.samples} 局弱策略模拟 · 弱策略：双方按启发式落子；非精确，仅供方向参考`;
+      dom.analysisCandidates.replaceChildren();
+      const title = document.createElement('p');
+      title.className = 'analysis-candidates-title';
+      title.textContent = '选点参考 · 前 3';
+      dom.analysisCandidates.append(title);
+      for (const candidate of result.candidates || []) {
+        const row = document.createElement('div');
+        row.className = 'analysis-candidate';
+        const move = document.createElement('b');
+        move.textContent = coordinateLabel(candidate.index, game.size);
+        const rates = document.createElement('span');
+        rates.textContent = `黑 ${Math.round(candidate.blackRate * 100)}% · 平 ${Math.round(candidate.drawRate * 100)}% · 白 ${Math.round(candidate.whiteRate * 100)}%`;
+        const samples = document.createElement('em');
+        samples.textContent = `${candidate.samples} 局`;
+        row.append(move, rates, samples);
+        dom.analysisCandidates.append(row);
+      }
+      dom.analysisCandidates.hidden = false;
     }
   } catch (error) {
     dom.analysisBody.hidden = false;

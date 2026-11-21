@@ -1,4 +1,4 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.7';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.8';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);
@@ -153,37 +153,80 @@ function chooseRolloutMove(board, size, color) {
   return best[Math.floor(Math.random() * best.length)].index;
 }
 
-function estimateWinRate(board, starter, size, komi, timeLimit) {
-  const started = performance.now();
-  let samples = 0;
-  let blackWins = 0;
-  let whiteWins = 0;
-  let draws = 0;
-  const deadline = started + timeLimit;
-  while (performance.now() < deadline) {
-    const copy = board.slice();
-    let player = starter;
-    let guard = size * size + 4;
-    while (guard-- > 0) {
-      const move = chooseRolloutMove(copy, size, player);
-      if (move < 0) break;
-      copy[move] = player;
-      player = player === BLACK ? WHITE : BLACK;
+function rootCandidates(board, size, color) {
+  const analysis = analyzeGroups(board, size);
+  const entries = [];
+  for (let index = 0; index < board.length; index += 1) {
+    if (board[index] !== EMPTY) continue;
+    const own = new Set();
+    const opponent = new Set();
+    for (const next of neighborsOf(index, size)) {
+      if (board[next] === color) own.add(analysis.groupIndex[next]);
+      else if (board[next] === (color === BLACK ? WHITE : BLACK)) opponent.add(analysis.groupIndex[next]);
     }
-    const analysis = analyzeGroups(copy, size);
-    const result = judgeScores({ black: analysis.black, white: analysis.white }, komi);
-    samples += 1;
-    if (result.winner === BLACK) blackWins += 1;
-    else if (result.winner === WHITE) whiteWins += 1;
-    else draws += 1;
+    const delta = own.size === 0 ? 1 : 1 - own.size;
+    const opponentDelta = opponent.size === 0 ? 1 : 1 - opponent.size;
+    entries.push({ index, priority: delta + opponentDelta * 0.35 });
   }
-  return {
-    samples,
-    blackRate: samples ? blackWins / samples : 0,
-    whiteRate: samples ? whiteWins / samples : 0,
-    drawRate: samples ? draws / samples : 0,
-    ms: performance.now() - started,
+  entries.sort((a, b) => a.priority - b.priority || a.index - b.index);
+  return entries.slice(0, 8);
+}
+
+function simulateOutcome(board, starter, size, komi) {
+  const copy = board.slice();
+  let player = starter === BLACK ? WHITE : BLACK;
+  let guard = size * size + 4;
+  while (guard-- > 0) {
+    const move = chooseRolloutMove(copy, size, player);
+    if (move < 0) break;
+    copy[move] = player;
+    player = player === BLACK ? WHITE : BLACK;
+  }
+  const analysis = analyzeGroups(copy, size);
+  return judgeScores({ black: analysis.black, white: analysis.white }, komi).winner;
+}
+
+function estimateCandidates(board, starter, size, komi, timeLimit) {
+  const started = performance.now();
+  const deadline = started + timeLimit;
+  const roots = rootCandidates(board, size, starter);
+  const stats = roots.map((root) => ({ index: root.index, samples: 0, currentWins: 0, blackWins: 0, whiteWins: 0, draws: 0 }));
+  const runOne = (item) => {
+    const next = board.slice();
+    next[item.index] = starter;
+    const winner = simulateOutcome(next, starter, size, komi);
+    item.samples += 1;
+    if (winner === starter) item.currentWins += 1;
+    if (winner === BLACK) item.blackWins += 1;
+    else if (winner === WHITE) item.whiteWins += 1;
+    else item.draws += 1;
   };
+  for (const item of stats) {
+    while (item.samples < 8 && performance.now() < deadline) runOne(item);
+  }
+  let progressed = true;
+  while (progressed && performance.now() < deadline) {
+    progressed = false;
+    for (const item of stats) {
+      if (performance.now() >= deadline) break;
+      runOne(item);
+      progressed = true;
+    }
+  }
+  const results = stats
+    .filter((item) => item.samples > 0)
+    .map((item) => ({
+      index: item.index,
+      samples: item.samples,
+      currentRate: item.currentWins / item.samples,
+      blackRate: item.blackWins / item.samples,
+      whiteRate: item.whiteWins / item.samples,
+      drawRate: item.draws / item.samples,
+    }))
+    .sort((a, b) => b.currentRate - a.currentRate || b.blackRate - a.blackRate);
+  const best = results[0] || { index: -1, samples: 0, currentRate: 0, blackRate: 0, whiteRate: 0, drawRate: 0 };
+  const total = stats.reduce((sum, item) => sum + item.samples, 0);
+  return { candidates: results.slice(0, 3), best, samples: total, ms: performance.now() - started, empty: countEmpty(board) };
 }
 
 export function analyzePosition(board, starter, size, komi, options = {}) {
@@ -198,6 +241,6 @@ export function analyzePosition(board, starter, size, komi, options = {}) {
     const exact = solveStructured(board, starter, size, komi, exactLimit);
     if (exact.solved) return { kind: 'exact', ...exact };
   }
-  const estimate = estimateWinRate(board, starter, size, komi, options.estimateLimit ?? 1200);
-  return { kind: 'estimate', ...estimate, empty };
+  const estimate = estimateCandidates(board, starter, size, komi, options.estimateLimit ?? 3000);
+  return { kind: 'estimate', ...estimate, blackRate: estimate.best.blackRate, whiteRate: estimate.best.whiteRate, drawRate: estimate.best.drawRate, empty };
 }

@@ -2621,3 +2621,12 @@ body.board-immersive .immersive-exit {
 
 .analysis-bar-draw { background: #b08a5a; transition: width .25s ease; }
 .turn-stone.is-draw, .result-stone.is-draw { background: linear-gradient(90deg, #d7d2c5 50%, #7c7c7c 50%); }
+
+.analysis-verdict { font-size: 15px !important; }
+.analysis-bar { height: 14px !important; }
+.analysis-candidates { display: grid; gap: 6px; margin-top: 2px; }
+.analysis-candidates-title { margin: 0 0 2px; font-size: 12px; color: #9c988e; letter-spacing: .04em; }
+.analysis-candidate { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; background: rgba(255,255,255,.045); font-size: 12px; }
+.analysis-candidate b { color: #f1c56b; font-size: 14px; }
+.analysis-candidate span { color: #e8e4da; }
+.analysis-candidate em { color: #9c988e; font-style: normal; font-size: 11px; }
