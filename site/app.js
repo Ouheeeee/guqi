@@ -25,7 +25,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.12';
+} from './game.js?v=1.9.13';
 import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,

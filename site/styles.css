@@ -2636,3 +2636,18 @@ body.board-immersive .immersive-exit {
 .analysis-candidate em { color: #9c988e; font-style: normal; font-size: 11px; }
 
 .analysis-rate { color: #9c988e; font-size: 12px; margin-left: 4px; }
+
+/* 评估面板使用正常深色文字，不用金色 */
+.analysis-verdict,
+.analysis-verdict strong,
+.analysis-candidate b {
+  color: var(--ink);
+}
+.analysis-candidate span {
+  color: var(--ink-soft);
+}
+.analysis-candidates-title,
+.analysis-candidate em,
+.analysis-meta {
+  color: var(--muted);
+}
