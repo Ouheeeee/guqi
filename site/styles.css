@@ -2615,11 +2615,11 @@ body.board-immersive .immersive-exit {
 .analysis-verdict { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text, #e8e4da); }
 .analysis-verdict strong { color: #f1c56b; }
 .analysis-bar { display: flex; height: 8px; overflow: hidden; border-radius: 999px; background: #3a3a3a; }
-.analysis-bar-black { background: #d7d2c5; transition: width .25s ease; }
-.analysis-bar-white { background: #7c7c7c; transition: width .25s ease; }
+.analysis-bar-black { background: #141414; border-right: 1px solid rgba(255,255,255,.35); transition: width .25s ease; }
+.analysis-bar-white { background: #f3efe3; transition: width .25s ease; }
 .analysis-meta { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted, #9c988e); }
 
-.analysis-bar-draw { background: #b08a5a; transition: width .25s ease; }
+.analysis-bar-draw { background: #c9a227; transition: width .25s ease; }
 .turn-stone.is-draw, .result-stone.is-draw { background: linear-gradient(90deg, #d7d2c5 50%, #7c7c7c 50%); }
 
 .analysis-verdict { font-size: 15px !important; }
@@ -2630,3 +2630,5 @@ body.board-immersive .immersive-exit {
 .analysis-candidate b { color: #f1c56b; font-size: 14px; }
 .analysis-candidate span { color: #e8e4da; }
 .analysis-candidate em { color: #9c988e; font-style: normal; font-size: 11px; }
+
+.analysis-rate { color: #9c988e; font-size: 12px; margin-left: 4px; }

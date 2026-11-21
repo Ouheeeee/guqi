@@ -1,5 +1,5 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.9';
-import { chooseSearchMove } from './ab-search.js?v=1.9.9';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.10';
+import { chooseSearchMove } from './ab-search.js?v=1.9.10';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);
@@ -230,17 +230,36 @@ function estimateCandidates(board, starter, size, komi, timeLimit) {
   return { candidates: results.slice(0, 3), best, samples: total, ms: performance.now() - started, empty: countEmpty(board) };
 }
 
-function analyzeAb(board, starter, size, komi, timeLimit) {
+function analyzeAbCandidates(board, starter, size, komi, timeLimit) {
   const started = performance.now();
-  const result = chooseSearchMove(board, starter, { size, komi, timeMs: timeLimit, maxDepth: 12, ttBits: 16 });
-  return {
-    move: result.move,
-    score: result.score / 1000,
-    depth: result.depth,
-    nodes: result.nodes,
-    ms: performance.now() - started,
-  };
+  const roots = rootCandidates(board, size, starter).slice(0, 6);
+  const perMove = Math.max(300, Math.floor(timeLimit / Math.max(1, roots.length)));
+  const out = [];
+  for (const root of roots) {
+    const next = board.slice();
+    next[root.index] = starter;
+    try {
+      const result = chooseSearchMove(next, starter === BLACK ? WHITE : BLACK, {
+        size,
+        komi,
+        timeMs: perMove,
+        maxDepth: 12,
+        ttBits: 16,
+      });
+      out.push({
+        index: root.index,
+        score: -result.score / 1000,
+        depth: result.depth,
+        nodes: result.nodes,
+      });
+    } catch (error) {
+      // Skip a failed candidate; other candidates still usable.
+    }
+  }
+  out.sort((a, b) => b.score - a.score);
+  return { candidates: out.slice(0, 3), ms: performance.now() - started, perMove };
 }
+
 
 export function analyzePosition(board, starter, size, komi, options = {}) {
   const empty = countEmpty(board);
@@ -254,10 +273,20 @@ export function analyzePosition(board, starter, size, komi, options = {}) {
     const exact = solveStructured(board, starter, size, komi, exactLimit);
     if (exact.solved) return { kind: 'exact', ...exact };
   }
-  try {
-    return { kind: 'ab', ...analyzeAb(board, starter, size, komi, options.abLimit ?? 5000), empty };
-  } catch (error) {
-    const estimate = estimateCandidates(board, starter, size, komi, options.estimateLimit ?? 3000);
+  const ab = analyzeAbCandidates(board, starter, size, komi, options.abLimit ?? 5000);
+  if (!ab.candidates.length) {
+    const estimate = estimateCandidates(board, starter, size, komi, options.estimateLimit ?? 2000);
     return { kind: 'estimate', ...estimate, blackRate: estimate.best.blackRate, whiteRate: estimate.best.whiteRate, drawRate: estimate.best.drawRate, empty };
   }
+  const estimate = estimateCandidates(board, starter, size, komi, options.estimateLimit ?? 1800);
+  return {
+    kind: 'hybrid',
+    abCandidates: ab.candidates,
+    abMs: ab.ms,
+    ...estimate,
+    blackRate: estimate.best.blackRate,
+    whiteRate: estimate.best.whiteRate,
+    drawRate: estimate.best.drawRate,
+    empty,
+  };
 }
