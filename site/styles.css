@@ -2651,3 +2651,9 @@ body.board-immersive .immersive-exit {
 .analysis-meta {
   color: var(--muted);
 }
+
+/* 不依赖 hover 媒体查询，保证桌面鼠标预览稳定显示 */
+.board.is-playing .cell:not(.occupied):hover::after {
+  opacity: 1;
+  transform: scale(1);
+}
