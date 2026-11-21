@@ -1,4 +1,5 @@
-import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.8';
+import { analyzeGroups, judgeScores, BLACK, WHITE, EMPTY } from './game.js?v=1.9.9';
+import { chooseSearchMove } from './ab-search.js?v=1.9.9';
 
 const neighborsOf = (index, size) => {
   const row = Math.floor(index / size);
@@ -229,6 +230,18 @@ function estimateCandidates(board, starter, size, komi, timeLimit) {
   return { candidates: results.slice(0, 3), best, samples: total, ms: performance.now() - started, empty: countEmpty(board) };
 }
 
+function analyzeAb(board, starter, size, komi, timeLimit) {
+  const started = performance.now();
+  const result = chooseSearchMove(board, starter, { size, komi, timeMs: timeLimit, maxDepth: 12, ttBits: 16 });
+  return {
+    move: result.move,
+    score: result.score / 1000,
+    depth: result.depth,
+    nodes: result.nodes,
+    ms: performance.now() - started,
+  };
+}
+
 export function analyzePosition(board, starter, size, komi, options = {}) {
   const empty = countEmpty(board);
   if (empty === 0) {
@@ -241,6 +254,10 @@ export function analyzePosition(board, starter, size, komi, options = {}) {
     const exact = solveStructured(board, starter, size, komi, exactLimit);
     if (exact.solved) return { kind: 'exact', ...exact };
   }
-  const estimate = estimateCandidates(board, starter, size, komi, options.estimateLimit ?? 3000);
-  return { kind: 'estimate', ...estimate, blackRate: estimate.best.blackRate, whiteRate: estimate.best.whiteRate, drawRate: estimate.best.drawRate, empty };
+  try {
+    return { kind: 'ab', ...analyzeAb(board, starter, size, komi, options.abLimit ?? 5000), empty };
+  } catch (error) {
+    const estimate = estimateCandidates(board, starter, size, komi, options.estimateLimit ?? 3000);
+    return { kind: 'estimate', ...estimate, blackRate: estimate.best.blackRate, whiteRate: estimate.best.whiteRate, drawRate: estimate.best.drawRate, empty };
+  }
 }

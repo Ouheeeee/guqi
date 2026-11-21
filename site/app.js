@@ -25,7 +25,7 @@ import {
   startGame,
   undoMove,
   colorName,
-} from './game.js?v=1.9.8';
+} from './game.js?v=1.9.9';
 import { analyzePosition } from './analysis.js?v=1.9.4';
 import {
   accountUrl,
@@ -1187,7 +1187,15 @@ async function handleAnalyze() {
     const turn = tryMode ? nextTryColor() : game.turn;
     const result = analyzePosition(board, turn, game.size, game.komi, { exactLimit: 2500, estimateLimit: 1200 });
     dom.analysisBody.hidden = false;
-    if (result.kind === 'exact') {
+    if (result.kind === 'ab') {
+      const move = result.move >= 0 ? coordinateLabel(result.move, game.size) : '无';
+      const score = Number(result.score || 0);
+      const scoreText = `${score > 0 ? '+' : ''}${formatNumber(score)} 间`;
+      dom.analysisVerdict.innerHTML = `<strong>AB 选点参考</strong> · ${move}`;
+      dom.analysisWinbar.hidden = true;
+      dom.analysisCandidates.hidden = true;
+      dom.analysisMeta.textContent = `5 秒 Alpha-Beta · 深度 ${result.depth} · ${Number(result.nodes || 0).toLocaleString()} 节点 · 当前方评分 ${scoreText}`;
+    } else if (result.kind === 'exact') {
       const draw = result.isDraw || result.winner === null;
       const label = draw ? '平局' : result.winner === BLACK ? '黑胜' : '白胜';
       const margin = typeof result.margin === 'number' ? formatNumber(result.margin) : '0';
